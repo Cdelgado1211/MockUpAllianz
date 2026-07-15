@@ -1,12 +1,180 @@
 import WizardFooter from './WizardFooter';
-import FormField from './FormField';
+import {
+  CheckIcon,
+  InfoIcon,
+  PaymentsIcon,
+  SparkIcon
+} from './Icon';
 
-function SmallCard({ title, children }) {
+function AutoBadge() {
   return (
-    <section className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-      <h3 className="text-lg font-extrabold text-slate-900">{title}</h3>
-      <div className="mt-4">{children}</div>
+    <span className="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-emerald-700 ring-1 ring-emerald-200">
+      IA EXTRAÍDO
+    </span>
+  );
+}
+
+function SectionCard({ icon: Icon, eyebrow, title, description, children, className = '' }) {
+  return (
+    <section className={`rounded-[20px] border border-[#E0E6ED] bg-white p-5 shadow-sm sm:p-6 ${className}`}>
+      <div className="flex items-start gap-4">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#EDF4FF] text-[#003781]">
+          <Icon className="h-5 w-5" />
+        </div>
+        <div className="min-w-0">
+          <p className="text-xs font-bold uppercase tracking-[0.28em] text-[#006494]">{eyebrow}</p>
+          <h3 className="mt-1 text-[20px] font-semibold leading-7 text-[#181C1E]">{title}</h3>
+          {description ? <p className="mt-2 max-w-4xl text-sm leading-6 text-[#434751]">{description}</p> : null}
+        </div>
+      </div>
+      <div className="mt-5">{children}</div>
     </section>
+  );
+}
+
+function FieldFrame({ label, autoIdentified, error, helperText, children }) {
+  return (
+    <label className="block">
+      <div className="mb-1.5 flex items-center justify-between gap-3">
+        <span className="text-[12px] font-semibold uppercase tracking-[0.16em] text-[#5B6573]">{label}</span>
+        {autoIdentified ? <AutoBadge /> : null}
+      </div>
+      {children}
+      {error ? (
+        <p className="mt-1.5 text-xs font-semibold text-[#D93025]">{error}</p>
+      ) : helperText ? (
+        <p className="mt-1.5 text-xs leading-5 text-[#6B7280]">{helperText}</p>
+      ) : null}
+    </label>
+  );
+}
+
+function TextInput({
+  label,
+  value,
+  onChange,
+  error,
+  helperText,
+  autoIdentified = false,
+  readOnly = false,
+  placeholder,
+  type = 'text'
+}) {
+  return (
+    <FieldFrame label={label} autoIdentified={autoIdentified} error={error} helperText={helperText}>
+      <input
+        type={type}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        readOnly={readOnly}
+        placeholder={placeholder}
+        className={`h-12 w-full rounded-xl border px-4 text-sm font-medium text-[#181C1E] outline-none transition placeholder:text-[#97A1AF] focus:ring-2 focus:ring-[#006494] focus:ring-offset-2 focus:ring-offset-white ${
+          error
+            ? 'border-[#F3B6AA] bg-[#FFF7F6]'
+            : readOnly
+              ? 'border-[#E0E6ED] bg-[#F7FAFC] text-[#4B5563]'
+              : 'border-[#E0E6ED] bg-white'
+        } ${readOnly ? 'cursor-not-allowed' : ''}`}
+      />
+    </FieldFrame>
+  );
+}
+
+function SelectField({ label, value, onChange, options, helperText, autoIdentified = false }) {
+  return (
+    <FieldFrame label={label} autoIdentified={autoIdentified} helperText={helperText}>
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="h-12 w-full rounded-xl border border-[#E0E6ED] bg-white px-4 text-sm font-medium text-[#181C1E] outline-none transition focus:ring-2 focus:ring-[#006494] focus:ring-offset-2 focus:ring-offset-white"
+      >
+        {options.map((option) => (
+          <option key={option} value={option}>
+            {option}
+          </option>
+        ))}
+      </select>
+    </FieldFrame>
+  );
+}
+
+function ChoiceGroup({ label, value, options, onChange, helperText, selectedTone = 'sky' }) {
+  return (
+    <div className="block">
+      <div className="mb-1.5 flex items-start justify-between gap-3">
+        <span className="text-[12px] font-semibold uppercase tracking-[0.16em] text-[#5B6573]">{label}</span>
+      </div>
+      <div className="grid gap-2 sm:grid-cols-3">
+        {options.map((option) => {
+          const selected = value === option;
+          return (
+            <button
+              key={option}
+              type="button"
+              aria-pressed={selected}
+              className={`focus-ring inline-flex h-11 items-center justify-center rounded-full border px-4 text-sm font-semibold transition ${
+                selected
+                  ? selectedTone === 'dark'
+                    ? 'border-[#003781] bg-[#003781] text-white shadow-sm shadow-[#003781]/20'
+                    : selectedTone === 'allianz'
+                      ? 'border-[#003781] bg-[#003781] text-white shadow-sm shadow-[#003781]/20'
+                      : 'border-[#006494] bg-[#EDF7FF] text-[#003781] shadow-sm'
+                  : 'border-[#E0E6ED] bg-white text-[#4B5563] hover:border-[#C9D5E2] hover:bg-[#F7FAFC]'
+              }`}
+              onClick={() => onChange(option)}
+            >
+              {option}
+            </button>
+          );
+        })}
+      </div>
+      {helperText ? <p className="mt-1.5 text-xs leading-5 text-[#6B7280]">{helperText}</p> : null}
+    </div>
+  );
+}
+
+function ManualNameFields({ person, personErrors, onPersonChange }) {
+  return (
+    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <TextInput
+        label="Parentesco"
+        value={person.parentesco || ''}
+        onChange={(value) => onPersonChange('parentesco', value)}
+        error={personErrors.parentesco}
+        placeholder="Ingresa el parentesco"
+      />
+      <TextInput
+        label="Nombre"
+        value={person.firstName}
+        onChange={(value) => onPersonChange('firstName', value)}
+        error={personErrors.firstName}
+        placeholder="Ingresa el nombre"
+      />
+      <TextInput
+        label="Apellido paterno"
+        value={person.paternalLastName}
+        onChange={(value) => onPersonChange('paternalLastName', value)}
+        error={personErrors.paternalLastName}
+        placeholder="Ingresa el apellido paterno"
+      />
+      <TextInput
+        label="Apellido materno"
+        value={person.maternalLastName}
+        onChange={(value) => onPersonChange('maternalLastName', value)}
+        error={personErrors.maternalLastName}
+        placeholder="Ingresa el apellido materno"
+      />
+    </div>
+  );
+}
+
+function ReadOnlyField({ label, value, autoIdentified = false, helperText = '' }) {
+  return (
+    <FieldFrame label={label} autoIdentified={autoIdentified} helperText={helperText}>
+      <div className="flex h-12 items-center rounded-xl border border-[#E0E6ED] bg-[#F7FAFC] px-4 text-sm font-medium text-[#4B5563]">
+        {value}
+      </div>
+    </FieldFrame>
   );
 }
 
@@ -30,6 +198,7 @@ export default function WizardStepInformation({
   const personErrors =
     !usingAutoData && person.relationship === 'Otro'
       ? {
+          parentesco: person.parentesco?.trim() ? '' : 'Ingresa el parentesco.',
           firstName: person.firstName.trim() ? '' : 'Ingresa el nombre.',
           paternalLastName: person.paternalLastName.trim() ? '' : 'Ingresa el apellido paterno.',
           maternalLastName: person.maternalLastName.trim() ? '' : 'Ingresa el apellido materno.'
@@ -38,29 +207,31 @@ export default function WizardStepInformation({
 
   return (
     <section className="space-y-4">
-      <div className="rounded-[2rem] border border-sky-200 bg-white p-5 shadow-sm sm:p-6">
-        <p className="text-xs font-bold uppercase tracking-[0.24em] text-sky-700">Sección 3 · Información</p>
-        <h2 className="mt-1 text-2xl font-extrabold text-slate-900">Captura y edición de datos identificados</h2>
-        <p className="mt-2 max-w-4xl text-sm leading-6 text-slate-600">
-          Los datos extraídos por OCR aparecen precargados y se pueden corregir manualmente cuando sea necesario.
+      <section className="rounded-[20px] border border-[#E0E6ED] bg-white p-5 shadow-sm sm:p-6">
+        <p className="text-xs font-bold uppercase tracking-[0.28em] text-[#006494]">Sección 3 · Información</p>
+        <h2 className="mt-1 text-[30px] font-semibold leading-tight text-[#181C1E] sm:text-[32px]">Revisión de información</h2>
+        <p className="mt-3 max-w-4xl text-base leading-7 text-[#434751]">
+          Hemos identificado la siguiente información. Verifica que sea correcta y completa los datos faltantes antes de continuar.
         </p>
-      </div>
+      </section>
 
-      <div className="grid gap-4 xl:grid-cols-2">
-        <SmallCard title="Información de la póliza">
+      <div className="space-y-4">
+        <SectionCard
+          icon={PaymentsIcon}
+          eyebrow="Datos de la póliza"
+          title="Información de la póliza"
+          description="Mantén a la vista los datos principales del contrato. Los valores detectados automáticamente siguen siendo editables."
+        >
           <div className="grid gap-4 md:grid-cols-2">
-            <label className="block">
-              <span className="mb-1.5 block text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Tipo de producto</span>
-              <select
-                value={policy.productType}
-                onChange={(event) => onPolicyChange('productType', event.target.value)}
-                className="focus-ring w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900"
-              >
-                <option value="Individual">Individual</option>
-                <option value="Colectiva">Colectiva</option>
-              </select>
-            </label>
-            <FormField
+            <ChoiceGroup
+              label="Tipo de producto"
+              value={policy.productType}
+              options={['Individual', 'Colectiva']}
+              onChange={(value) => onPolicyChange('productType', value)}
+              selectedTone="allianz"
+            />
+
+            <TextInput
               label="Número de póliza"
               value={policy.policyNumber}
               onChange={(value) => onPolicyChange('policyNumber', value)}
@@ -68,102 +239,85 @@ export default function WizardStepInformation({
               helperText="Puedes corregirlo si el OCR detectó un dato distinto."
             />
           </div>
-        </SmallCard>
+        </SectionCard>
 
-        <SmallCard title="Persona que realiza el trámite">
-          <div className="space-y-4">
-            <div>
-              <p className="text-sm font-semibold text-slate-700">
-                ¿La persona que solicita este trámite es el titular o el afectado?
-              </p>
-              <div className="mt-3 grid gap-2 sm:grid-cols-3">
-                {['Titular', 'Afectado', 'Otro'].map((option) => (
-                  <button
-                    key={option}
-                    type="button"
-                    className={`rounded-2xl border px-4 py-3 text-sm font-bold transition ${
-                      person.relationship === option
-                        ? 'border-sky-300 bg-sky-50 text-sky-900'
-                        : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
-                    }`}
-                    onClick={() => onPersonChange('relationship', option)}
-                  >
-                    {option}
-                  </button>
-                ))}
-              </div>
-            </div>
+        <SectionCard
+          icon={SparkIcon}
+          eyebrow="Persona solicitante"
+          title="Persona que realiza el trámite"
+          description="Selecciona quién solicita el trámite y reutiliza la información detectada cuando corresponda."
+        >
+          <div className="space-y-5">
+            <ChoiceGroup
+              label="¿La persona que solicita este trámite es el titular o el afectado?"
+              value={person.relationship}
+              options={['Titular', 'Afectado', 'Otro']}
+              onChange={(value) => onPersonChange('relationship', value)}
+              selectedTone="dark"
+            />
 
             {usingAutoData ? (
-              <div className="space-y-3 rounded-2xl border border-sky-100 bg-sky-50 px-4 py-4">
-                <FormField
-                  label="Nombre completo"
-                  value={extracted.person.fullName}
-                  onChange={() => {}}
-                  readOnly
-                  autoIdentified
-                />
-                <p className="text-sm leading-6 text-slate-600">
-                  El sistema reutiliza el nombre identificado en los documentos y solo te pide validar los contactos faltantes.
-                </p>
-                <button
-                  type="button"
-                  className="rounded-full bg-white px-3 py-1.5 text-xs font-bold text-sky-800 transition hover:bg-sky-100"
-                  onClick={() => onPersonChange('relationship', 'Otro')}
-                >
-                  Editar manualmente
-                </button>
+              <div className="rounded-[20px] border border-[#D7E4F2] bg-[#F7FAFC] p-4">
+                <div className="grid gap-4 md:grid-cols-3">
+                  <TextInput
+                    label="Nombre"
+                    value={person.firstName}
+                    onChange={(value) => onPersonChange('firstName', value)}
+                    autoIdentified
+                    helperText="El sistema reutiliza el nombre detectado en los documentos, pero puedes corregirlo si es necesario."
+                  />
+                  <TextInput
+                    label="Apellido paterno"
+                    value={person.paternalLastName}
+                    onChange={(value) => onPersonChange('paternalLastName', value)}
+                    autoIdentified
+                    helperText="Puedes corregirlo si el OCR detectó un dato distinto."
+                  />
+                  <TextInput
+                    label="Apellido materno"
+                    value={person.maternalLastName}
+                    onChange={(value) => onPersonChange('maternalLastName', value)}
+                    autoIdentified
+                    helperText="Puedes corregirlo si el OCR detectó un dato distinto."
+                  />
+                </div>
               </div>
             ) : (
-              <div className="grid gap-4 md:grid-cols-3">
-                <FormField
-                  label="Nombre"
-                  value={person.firstName}
-                  onChange={(value) => onPersonChange('firstName', value)}
-                  error={personErrors.firstName}
-                />
-                <FormField
-                  label="Apellido paterno"
-                  value={person.paternalLastName}
-                  onChange={(value) => onPersonChange('paternalLastName', value)}
-                  error={personErrors.paternalLastName}
-                />
-                <FormField
-                  label="Apellido materno"
-                  value={person.maternalLastName}
-                  onChange={(value) => onPersonChange('maternalLastName', value)}
-                  error={personErrors.maternalLastName}
-                />
-              </div>
+              <ManualNameFields person={person} personErrors={personErrors} onPersonChange={onPersonChange} />
             )}
           </div>
-        </SmallCard>
+        </SectionCard>
       </div>
 
-      <SmallCard title="Datos de contacto">
+      <SectionCard
+        icon={InfoIcon}
+        eyebrow="Contacto"
+        title="Datos de contacto"
+        description="Verifica que los datos de contacto estén vigentes para que el trámite pueda continuar sin fricción."
+      >
         <div className="grid gap-4 md:grid-cols-2">
-          <FormField
+          <TextInput
             label="Teléfono particular"
             value={contact.phoneLandline}
             onChange={(value) => onContactChange('phoneLandline', value)}
             placeholder="10 dígitos"
             error={contactErrors.phoneLandline}
           />
-          <FormField
+          <TextInput
             label="Teléfono celular"
             value={contact.mobilePhone}
             onChange={(value) => onContactChange('mobilePhone', value)}
             placeholder="10 dígitos"
             error={contactErrors.mobilePhone}
           />
-          <FormField
+          <TextInput
             label="Correo electrónico"
             value={contact.email}
             onChange={(value) => onContactChange('email', value)}
             type="email"
             error={contactErrors.email}
           />
-          <FormField
+          <TextInput
             label="Confirmación de correo"
             value={contact.emailConfirmation}
             onChange={(value) => onContactChange('emailConfirmation', value)}
@@ -171,21 +325,39 @@ export default function WizardStepInformation({
             error={contactErrors.emailConfirmation}
           />
         </div>
-      </SmallCard>
+      </SectionCard>
 
-      <SmallCard title="Datos identificados automáticamente">
+      <SectionCard
+        icon={CheckIcon}
+        eyebrow="Datos detectados"
+        title="Datos identificados automáticamente"
+        description="Estos datos fueron precargados por el sistema y puedes revisarlos antes de avanzar."
+      >
         <div className="grid gap-4 md:grid-cols-3">
-          <FormField label="Relación" value={person.relationship} onChange={(value) => onPersonChange('relationship', value)} readOnly />
-          <FormField label="Nombre completo" value={person.fullName} onChange={() => {}} readOnly autoIdentified />
-          <FormField
+          <ReadOnlyField label="Relación" value={person.relationship} autoIdentified />
+          <ReadOnlyField label="Nombre completo" value={person.fullName} autoIdentified />
+          <ReadOnlyField
             label="Contacto detectado"
             value={person.contactAutoIdentified ? 'Sí' : 'No'}
-            onChange={() => {}}
-            readOnly
-            autoIdentified
+            autoIdentified={person.contactAutoIdentified}
+            helperText="El sistema detectó información para reutilizarla en el trámite."
           />
         </div>
-      </SmallCard>
+      </SectionCard>
+
+      <section className="rounded-[20px] border border-[#CFE8D5] bg-[#F6FBF7] p-5 shadow-sm sm:p-6">
+        <div className="flex items-start gap-4">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-[#006494] shadow-sm">
+            <InfoIcon className="h-5 w-5" />
+          </div>
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.28em] text-[#006494]">¿Necesitas ayuda?</p>
+            <p className="mt-1 text-sm leading-6 text-[#434751]">
+              Si algún dato no es correcto, puedes editarlo antes de continuar.
+            </p>
+          </div>
+        </div>
+      </section>
 
       <WizardFooter
         onBack={onBack}

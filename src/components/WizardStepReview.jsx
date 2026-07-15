@@ -104,14 +104,35 @@ export default function WizardStepReview({
       </ReviewCard>
 
       <ReviewCard title="Alertas pendientes" onEdit={() => onEditStep(1)}>
-        <div className="space-y-3">
+        <div className="grid gap-3 lg:grid-cols-2">
           {pendingAlerts.length > 0 ? (
             pendingAlerts.map((alert) => (
-              <div key={alert.id} className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm">
-                <p className="font-bold text-amber-900">{alert.title}</p>
-                <p className="mt-1 text-xs text-amber-900/80">
-                  {alert.sourceDocument} vs. {alert.comparedDocument}
-                </p>
+              <div key={alert.id} className="rounded-[16px] border border-amber-200 bg-white p-4 shadow-sm sm:p-5">
+                <div className="flex items-start gap-3">
+                  <div
+                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#FFF4DF] text-[#A15C00]"
+                    aria-hidden="true"
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      className="h-5 w-5"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M12 8v4" />
+                      <path d="M12 16h.01" />
+                      <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" />
+                    </svg>
+                  </div>
+
+                  <div className="min-w-0">
+                    <p className="text-sm font-extrabold leading-6 text-[#181C1E]">{alert.title}</p>
+                    <p className="mt-1 text-xs leading-5 text-[#586273]">{alert.reason}</p>
+                  </div>
+                </div>
               </div>
             ))
           ) : (
@@ -124,7 +145,7 @@ export default function WizardStepReview({
 
       <ReviewCard title="Alertas aceptadas por el usuario" onEdit={() => onEditStep(1)}>
         {acceptedAlerts.length > 0 ? (
-          <div className="grid gap-3">
+          <div className="grid gap-3 lg:grid-cols-2">
             {acceptedAlerts.map((alertId) => {
               const alert = alerts.find((item) => item.id === alertId);
               if (!alert) return null;

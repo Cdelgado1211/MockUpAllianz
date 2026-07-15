@@ -89,7 +89,15 @@ function reducer(state, action) {
         ...state,
         person: {
           ...state.person,
-          [action.field]: action.value
+          [action.field]: action.value,
+          ...(action.field === 'firstName' || action.field === 'paternalLastName' || action.field === 'maternalLastName'
+            ? {
+                fullName: [action.field === 'firstName' ? action.value : state.person.firstName, action.field === 'paternalLastName' ? action.value : state.person.paternalLastName, action.field === 'maternalLastName' ? action.value : state.person.maternalLastName]
+                  .map((part) => String(part ?? '').trim())
+                  .filter(Boolean)
+                  .join(' ')
+              }
+            : {})
         }
       };
     case 'SET_CONTACT_FIELD':
@@ -164,7 +172,14 @@ function getReviewBlockedReason(state) {
   const contactErrors = getContactErrors(state.contact);
   if (contactErrors.mobilePhone || contactErrors.email || contactErrors.emailConfirmation || contactErrors.phoneLandline) return 'contact';
   if (state.person.relationship === 'Otro') {
-    if (!state.person.firstName.trim() || !state.person.paternalLastName.trim() || !state.person.maternalLastName.trim()) return 'person';
+    if (
+      !String(state.person.parentesco ?? '').trim() ||
+      !state.person.firstName.trim() ||
+      !state.person.paternalLastName.trim() ||
+      !state.person.maternalLastName.trim()
+    ) {
+      return 'person';
+    }
   }
   const claimError = getClaimErrors(state.claimant);
   if (claimError) return 'claim';
@@ -604,6 +619,8 @@ function WizardApp() {
         onPrimary={handleConfirmSend}
         onEditStep={(stepIndex) => dispatch({ type: 'SET_STEP', value: stepIndex })}
         onConfirmAndSendDisabled={!state.reviewConfirmed || Boolean(reviewBlockedReason)}
+        onResolveAlert={handleAlertResolve}
+        onIgnoreAlert={handleAlertIgnore}
         acceptedAlerts={state.acceptedAlerts}
       />
     );

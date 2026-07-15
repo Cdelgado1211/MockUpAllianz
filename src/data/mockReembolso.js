@@ -151,6 +151,7 @@ export const demoExtraction = {
   },
   person: {
     relationship: 'Titular',
+    parentesco: '',
     fullName: 'María Fernanda López García',
     firstName: 'María Fernanda',
     paternalLastName: 'López',

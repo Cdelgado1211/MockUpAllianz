@@ -1,12 +1,104 @@
 import WizardFooter from './WizardFooter';
-import FormField from './FormField';
 
-function SmallCard({ title, children }) {
+function AutoBadge() {
   return (
-    <section className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-      <h3 className="text-lg font-extrabold text-slate-900">{title}</h3>
-      <div className="mt-4">{children}</div>
+    <span className="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-emerald-700 ring-1 ring-emerald-200">
+      IA EXTRAÍDO
+    </span>
+  );
+}
+
+function SectionCard({ eyebrow, title, description, children }) {
+  return (
+    <section className="rounded-[20px] border border-[#E0E6ED] bg-white p-5 shadow-sm sm:p-6">
+      <p className="text-xs font-bold uppercase tracking-[0.28em] text-[#006494]">{eyebrow}</p>
+      <h3 className="mt-1 text-[20px] font-semibold leading-7 text-[#181C1E]">{title}</h3>
+      {description ? <p className="mt-2 max-w-4xl text-sm leading-6 text-[#434751]">{description}</p> : null}
+      <div className="mt-5">{children}</div>
     </section>
+  );
+}
+
+function FieldFrame({ label, autoIdentified, error, helperText, children }) {
+  return (
+    <label className="block">
+      <div className="mb-1.5 flex items-center justify-between gap-3">
+        <span className="text-[12px] font-semibold uppercase tracking-[0.16em] text-[#5B6573]">{label}</span>
+        {autoIdentified ? <AutoBadge /> : null}
+      </div>
+      {children}
+      {error ? (
+        <p className="mt-1.5 text-xs font-semibold text-[#D93025]">{error}</p>
+      ) : helperText ? (
+        <p className="mt-1.5 text-xs leading-5 text-[#6B7280]">{helperText}</p>
+      ) : null}
+    </label>
+  );
+}
+
+function TextInput({
+  label,
+  value,
+  onChange,
+  error,
+  helperText,
+  autoIdentified = false,
+  readOnly = false,
+  placeholder,
+  type = 'text',
+  disabled = false
+}) {
+  return (
+    <FieldFrame label={label} autoIdentified={autoIdentified} error={error} helperText={helperText}>
+      <input
+        type={type}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        readOnly={readOnly}
+        disabled={disabled}
+        placeholder={placeholder}
+        className={`h-12 w-full rounded-xl border px-4 text-sm font-medium text-[#181C1E] outline-none transition placeholder:text-[#97A1AF] focus:ring-2 focus:ring-[#006494] focus:ring-offset-2 focus:ring-offset-white ${
+          error
+            ? 'border-[#F3B6AA] bg-[#FFF7F6]'
+            : readOnly || disabled
+              ? 'border-[#E0E6ED] bg-[#F7FAFC] text-[#4B5563]'
+              : 'border-[#E0E6ED] bg-white'
+        } ${readOnly || disabled ? 'cursor-not-allowed' : ''}`}
+      />
+    </FieldFrame>
+  );
+}
+
+function ChoiceGroup({ label, value, options, onChange, helperText, selectedTone = 'sky' }) {
+  return (
+    <div className="block">
+      <div className="mb-1.5 flex items-start justify-between gap-3">
+        <span className="text-[12px] font-semibold uppercase tracking-[0.16em] text-[#5B6573]">{label}</span>
+      </div>
+      <div className="grid gap-2 sm:grid-cols-2">
+        {options.map((option) => {
+          const selected = value === option;
+          return (
+            <button
+              key={option}
+              type="button"
+              aria-pressed={selected}
+              className={`focus-ring inline-flex h-11 items-center justify-center rounded-full border px-4 text-sm font-semibold transition ${
+                selected
+                  ? selectedTone === 'dark'
+                    ? 'border-[#003781] bg-[#003781] text-white shadow-sm shadow-[#003781]/20'
+                    : 'border-[#003781] bg-[#003781] text-white shadow-sm shadow-[#003781]/20'
+                  : 'border-[#E0E6ED] bg-white text-[#4B5563] hover:border-[#C9D5E2] hover:bg-[#F7FAFC]'
+              }`}
+              onClick={() => onChange(option)}
+            >
+              {option}
+            </button>
+          );
+        })}
+      </div>
+      {helperText ? <p className="mt-1.5 text-xs leading-5 text-[#6B7280]">{helperText}</p> : null}
+    </div>
   );
 }
 
@@ -19,96 +111,103 @@ export default function WizardStepClaim({
   primaryDisabled = false,
   claimError = ''
 }) {
+  const needsSinister = claimant.type === 'Complemento';
+  const allowSinister = !needsSinister || claimant.knowsSinisterNumber === 'Sí';
+
   return (
     <section className="space-y-4">
-      <div className="rounded-[2rem] border border-sky-200 bg-white p-5 shadow-sm sm:p-6">
-        <p className="text-xs font-bold uppercase tracking-[0.24em] text-sky-700">Sección 4 · Reclamación</p>
-        <h2 className="mt-1 text-2xl font-extrabold text-slate-900">Datos de la reclamación</h2>
-        <p className="mt-2 max-w-4xl text-sm leading-6 text-slate-600">
-          Completa la información principal del reclamo. Los valores precargados pueden editarse.
+      <section className="rounded-[20px] border border-[#E0E6ED] bg-white p-5 shadow-sm sm:p-6">
+        <p className="text-xs font-bold uppercase tracking-[0.28em] text-[#006494]">Sección 4 · Reclamación</p>
+        <h2 className="mt-1 text-[30px] font-semibold leading-tight text-[#181C1E] sm:text-[32px]">Revisión de reclamación</h2>
+        <p className="mt-3 max-w-4xl text-base leading-7 text-[#434751]">
+          Completa la información principal del reclamo. Los valores precargados pueden editarse antes de continuar.
         </p>
-      </div>
+      </section>
 
-      <SmallCard title="Tipo y monto de la reclamación">
-        <div className="grid gap-4 md:grid-cols-2">
-          <div>
-            <p className="mb-1.5 text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Tipo de reclamación</p>
-            <div className="grid gap-2 sm:grid-cols-2">
-              {['Inicial', 'Complemento'].map((option) => (
-                <button
-                  key={option}
-                  type="button"
-                  className={`rounded-2xl border px-4 py-3 text-sm font-bold transition ${
-                    claimant.type === option
-                      ? 'border-sky-300 bg-sky-50 text-sky-900'
-                      : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
-                  }`}
-                  onClick={() => onClaimantChange('type', option)}
-                >
-                  {option}
-                </button>
-              ))}
-            </div>
-          </div>
+      <SectionCard
+        eyebrow="Tipo de reclamación"
+        title="Datos de la reclamación"
+        description="Selecciona el tipo de reclamo y, si es complemento, confirma si conoces el número de siniestro."
+      >
+        <div className="grid gap-4 lg:grid-cols-2">
+          <ChoiceGroup
+            label="Tipo de reclamación"
+            value={claimant.type}
+            options={['Inicial', 'Complemento']}
+            onChange={(value) => onClaimantChange('type', value)}
+            selectedTone="dark"
+          />
 
-          {claimant.type === 'Complemento' && (
-            <div>
-              <p className="mb-1.5 text-xs font-bold uppercase tracking-[0.2em] text-slate-500">¿Conoces el número de tu siniestro?</p>
-              <div className="grid gap-2 sm:grid-cols-2">
-                {['Sí', 'No'].map((option) => (
-                  <button
-                    key={option}
-                    type="button"
-                    className={`rounded-2xl border px-4 py-3 text-sm font-bold transition ${
-                      claimant.knowsSinisterNumber === option
-                        ? 'border-sky-300 bg-sky-50 text-sky-900'
-                        : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
-                    }`}
-                    onClick={() => onClaimantChange('knowsSinisterNumber', option)}
-                  >
-                    {option}
-                  </button>
-                ))}
-              </div>
+          {needsSinister ? (
+            <ChoiceGroup
+              label="¿Conoces el número de tu siniestro?"
+              value={claimant.knowsSinisterNumber}
+              options={['Sí', 'No']}
+              onChange={(value) => onClaimantChange('knowsSinisterNumber', value)}
+              selectedTone="dark"
+            />
+          ) : (
+            <div className="rounded-[20px] border border-dashed border-[#E0E6ED] bg-[#F7FAFC] p-4 text-sm leading-6 text-[#6B7280]">
+              Cuando el trámite sea complemento, podrás indicar si conoces el número de siniestro.
             </div>
           )}
         </div>
-      </SmallCard>
+      </SectionCard>
 
-      <SmallCard title="Campos de reclamación">
+      <SectionCard
+        eyebrow="Campos de reclamación"
+        title="Información de la reclamación"
+        description="Los datos precargados siguen siendo editables y se usan para preparar la siguiente etapa del flujo."
+      >
         <div className="grid gap-4 md:grid-cols-2">
-          <FormField
+          <TextInput
             label="Número de siniestro"
             value={claimant.sinisterNumber}
             onChange={(value) => onClaimantChange('sinisterNumber', value)}
-            placeholder="Opcional si no lo conoces"
-            helperText={claimant.type === 'Complemento' && claimant.knowsSinisterNumber === 'Sí' ? undefined : 'Puede permanecer vacío si no se conoce.'}
+            autoIdentified={claimant.identifiedAutomatically}
+            placeholder={needsSinister && claimant.knowsSinisterNumber === 'Sí' ? 'Captura el número' : 'Opcional si no lo conoces'}
+            helperText={needsSinister && claimant.knowsSinisterNumber === 'No' ? 'Puede permanecer vacío si no se conoce.' : 'Puede permanecer vacío si no se conoce.'}
             error={claimError}
-            disabled={claimant.type === 'Complemento' && claimant.knowsSinisterNumber === 'No'}
+            disabled={needsSinister && claimant.knowsSinisterNumber === 'No'}
           />
 
-          <FormField
+          <TextInput
             label="Moneda"
             value={claimant.currency}
             onChange={(value) => onClaimantChange('currency', value)}
+            autoIdentified={claimant.identifiedAutomatically}
             helperText="Selecciona la moneda de los recibos."
           />
 
-          <FormField
+          <TextInput
             label="Monto reclamado"
             value={claimant.claimedAmount}
             onChange={(value) => onClaimantChange('claimedAmount', value)}
-            helperText="Captura solo números o formato libre para la demostración."
+            helperText="Puedes ajustar el monto si el valor detectado no es correcto."
           />
 
-          <FormField
+          <TextInput
             label="Cantidad de recibos o facturas"
             value={claimant.receiptsCount}
             onChange={(value) => onClaimantChange('receiptsCount', value)}
             helperText="Número total de comprobantes a reembolsar."
           />
         </div>
-      </SmallCard>
+      </SectionCard>
+
+      <section className="rounded-[20px] border border-[#CFE8D5] bg-[#F6FBF7] p-5 shadow-sm sm:p-6">
+        <div className="flex items-start gap-4">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-[#006494] shadow-sm">
+            <span className="text-lg font-bold">?</span>
+          </div>
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.28em] text-[#006494]">¿Necesitas ayuda?</p>
+            <p className="mt-1 text-sm leading-6 text-[#434751]">
+              Revisa el tipo de reclamación y completa el número de siniestro solo si aplica a tu caso.
+            </p>
+          </div>
+        </div>
+      </section>
 
       <WizardFooter
         onBack={onBack}
