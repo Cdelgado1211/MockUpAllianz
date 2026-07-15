@@ -73,3 +73,75 @@ export function SparkIcon({ className = 'h-5 w-5' }) {
     </svg>
   );
 }
+
+export function ChevronRightIcon({ className = 'h-4 w-4' }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
+      <path d="m9 5 7 7-7 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+export function PaymentsIcon({ className = 'h-5 w-5' }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
+      <rect x="4" y="6" width="16" height="12" rx="2.5" stroke="currentColor" strokeWidth="1.75" />
+      <path d="M4 10h16" stroke="currentColor" strokeWidth="1.75" />
+      <path d="M7 14h4" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+      <path d="M14 14h3" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+export function MedicalServicesIcon({ className = 'h-5 w-5' }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
+      <path d="M9 7h6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <path d="M12 4v6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <path
+        d="M8.5 4.75h7a3 3 0 0 1 3 3v8.5a3 3 0 0 1-3 3h-7a3 3 0 0 1-3-3v-8.5a3 3 0 0 1 3-3Z"
+        stroke="currentColor"
+        strokeWidth="1.75"
+      />
+      <path d="M9 13h6" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+      <path d="M12 10v6" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+export function SmartToyIcon({ className = 'h-5 w-5' }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
+      <path
+        d="M8 9a4 4 0 0 1 4-4h0a4 4 0 0 1 4 4v5a4 4 0 0 1-4 4h0a4 4 0 0 1-4-4V9Z"
+        stroke="currentColor"
+        strokeWidth="1.75"
+      />
+      <path d="M12 5V3" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+      <path d="M6.5 11h-2" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+      <path d="M19.5 11h-2" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+      <path d="M9.25 14.5h5.5" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+      <path d="M8.5 17.5h7" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+export function TimelineIcon({ className = 'h-5 w-5' }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
+      <path d="M5 7h14" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+      <path d="M5 12h9" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+      <path d="M5 17h12" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+      <path d="M18 12a1.5 1.5 0 1 0 0-.01" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+export function ArrowRightIcon({ className = 'h-4 w-4' }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
+      <path d="M5 12h13" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
+      <path d="m13 6 6 6-6 6" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}

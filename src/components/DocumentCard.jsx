@@ -46,6 +46,22 @@ export default function DocumentCard({
   const inputRef = useRef(null);
   const multiple = document.multiple;
   const displayFiles = useMemo(() => document.files ?? [], [document.files]);
+  const hasIssue = document.status === 'requires_review' || document.status === 'illegible';
+  const isValidated = document.status === 'validated';
+  const isProcessing = document.status === 'processing';
+  const dropzoneLabel = hasIssue ? 'Hay documentos inválidos, revisa la lista inferior.' : 'Arrastra y suelta aquí';
+  const dropzoneTone = hasIssue
+    ? 'border-[#E74C2C] bg-[#FFF7F5]'
+    : isValidated
+      ? 'border-emerald-300 bg-emerald-50/35'
+      : isProcessing
+        ? 'border-amber-300 bg-amber-50/45'
+        : 'border-slate-200 bg-white';
+  const dropzoneHoverTone = hasIssue
+    ? 'hover:border-[#E74C2C] hover:bg-[#FFF4F1]'
+    : isValidated
+      ? 'hover:border-emerald-300 hover:bg-emerald-50/50'
+      : 'hover:border-sky-300 hover:bg-sky-50/30';
 
   const openPicker = () => {
     if (inputRef.current) inputRef.current.click();
@@ -68,7 +84,7 @@ export default function DocumentCard({
   return (
     <article
       className={`rounded-[1.75rem] border bg-white p-4 shadow-sm transition sm:p-5 ${
-        isHighlighted ? 'border-sky-300 shadow-glow' : 'border-slate-200'
+        isHighlighted ? 'border-sky-300 shadow-glow' : hasIssue ? 'border-[#F6C4B8]' : 'border-slate-200'
       }`}
     >
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
@@ -80,11 +96,6 @@ export default function DocumentCard({
         </div>
 
         <div className="flex flex-col items-start gap-2 sm:items-end">
-          {document.required ? (
-            <span className="text-sm font-bold text-slate-500">Requerido</span>
-          ) : (
-            <span className="text-sm font-bold text-slate-500">Opcional</span>
-          )}
           <div className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-bold ring-1 ${statusStyles[document.status]}`}>
             <StatusDot status={document.status} />
             {statusLabel(document.status)}
@@ -93,7 +104,7 @@ export default function DocumentCard({
       </div>
 
       <div
-        className="mt-4 rounded-[1.5rem] border-2 border-dashed border-slate-200 bg-white px-4 py-6 transition hover:border-sky-300 hover:bg-sky-50/30 sm:px-6 sm:py-8"
+        className={`mt-4 rounded-[1.5rem] border-2 border-dashed px-4 py-6 transition sm:px-6 sm:py-8 ${dropzoneTone} ${dropzoneHoverTone}`}
         onDrop={handleDrop}
         onDragOver={handleDragOver}
       >
@@ -107,14 +118,28 @@ export default function DocumentCard({
         />
 
         <div className="mx-auto flex max-w-xl flex-col items-center text-center">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-sky-50 text-sky-700">
-            <DownloadIcon className="h-5 w-5" />
+          <div
+            className={`inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-sm font-bold ${
+              hasIssue ? 'bg-[#FDE7E2] text-[#E74C2C]' : isValidated ? 'bg-emerald-50 text-emerald-700' : 'bg-sky-50 text-sky-700'
+            }`}
+          >
+            {hasIssue && <AlertIcon className="h-4 w-4" />}
+            {isValidated && <CheckIcon className="h-4 w-4" />}
+            {isProcessing && <SparkIcon className="h-4 w-4 animate-pulse" />}
+            {hasIssue ? 'Hay documentos inválidos' : isValidated ? 'Documento validado' : 'Arrastra y suelta aquí'}
           </div>
-          <p className="mt-4 text-base font-extrabold text-sky-800 sm:text-lg">Arrastra y suelta aquí</p>
+
+          <p className="mt-4 text-base font-extrabold text-sky-800 sm:text-lg">
+            {hasIssue ? 'Revisa este documento antes de continuar:' : 'Arrastra y suelta aquí'}
+          </p>
           <p className="mt-2 text-sm text-slate-500 sm:text-[15px]">PDF, JPG o PNG</p>
           <button
             type="button"
-            className="focus-ring mt-4 inline-flex items-center justify-center rounded-full border border-sky-700 bg-white px-5 py-2.5 text-sm font-extrabold text-sky-800 transition hover:bg-sky-50"
+            className={`focus-ring mt-4 inline-flex items-center justify-center rounded-full border bg-white px-5 py-2.5 text-sm font-extrabold transition ${
+              hasIssue
+                ? 'border-[#003781] text-[#003781] hover:bg-[#F8FBFF]'
+                : 'border-sky-700 text-sky-800 hover:bg-sky-50'
+            }`}
             onClick={openPicker}
           >
             Seleccionar archivos
@@ -125,18 +150,45 @@ export default function DocumentCard({
       <div className="mt-4 space-y-3">
         {displayFiles.length > 0 ? (
           displayFiles.map((file) => (
-            <div key={file.id} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5">
+            <div
+              key={file.id}
+              className={`rounded-2xl px-4 py-3 ${
+                hasIssue ? 'border border-[#E74C2C] bg-[#FFF7F5]' : isValidated ? 'border border-emerald-200 bg-emerald-50/35' : 'border border-slate-200 bg-slate-50'
+              }`}
+            >
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-bold text-slate-900">{file.name}</p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="truncate text-sm font-bold text-slate-900">{file.name}</p>
+                    {hasIssue && (
+                      <span className="inline-flex items-center rounded-full bg-[#F6C4B8] px-3 py-1 text-xs font-semibold text-[#E74C2C]">
+                        Documento inválido
+                      </span>
+                    )}
+                    {isValidated && (
+                      <span className="inline-flex items-center rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">
+                        Válido
+                      </span>
+                    )}
+                  </div>
                   <p className="mt-1 text-xs text-slate-500">
                     {file.size} · {file.type}
                   </p>
+                  {hasIssue && (
+                    <p className="mt-3 text-sm font-semibold text-[#E74C2C]">
+                      Revisa este documento antes de continuar:
+                    </p>
+                  )}
+                  {hasIssue && (
+                    <p className="mt-1 text-sm leading-6 text-[#E74C2C]">{document.validationNote}</p>
+                  )}
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <button
                     type="button"
-                    className="rounded-full bg-sky-50 px-3 py-1.5 text-xs font-bold text-sky-800 transition hover:bg-sky-100"
+                    className={`rounded-full px-3 py-1.5 text-xs font-bold transition ${
+                      hasIssue ? 'bg-white text-[#003781] hover:bg-[#F8FBFF]' : 'bg-sky-50 text-sky-800 hover:bg-sky-100'
+                    }`}
                     onClick={() => onReplaceFile(openPicker)}
                   >
                     Reemplazar

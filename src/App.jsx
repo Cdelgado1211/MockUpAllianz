@@ -193,17 +193,19 @@ function getRelatedDocumentId(alert) {
 
 function WizardApp() {
   const [state, dispatch] = useReducer(reducer, undefined, createInitialWizardState);
-  const [showNoDocsModal, setShowNoDocsModal] = useState(false);
+  const [showDocsWarningModal, setShowDocsWarningModal] = useState(false);
+  const [docsWarningContext, setDocsWarningContext] = useState('partial');
   const [showAlertContinueModal, setShowAlertContinueModal] = useState(false);
   const [filePreview, setFilePreview] = useState(null);
   const [highlightedDocumentId, setHighlightedDocumentId] = useState(null);
   const [selectedTramite, setSelectedTramite] = useState(null);
+  const [hasViewedReimbursementPopup, setHasViewedReimbursementPopup] = useState(false);
   const [showTramiteInfoModal, setShowTramiteInfoModal] = useState(false);
   const [showTramiteDocumentsModal, setShowTramiteDocumentsModal] = useState(false);
-  const [selectionCanContinue, setSelectionCanContinue] = useState(false);
   const uploadTimersRef = useRef({});
   const validationTimersRef = useRef([]);
   const toastTimerRef = useRef(null);
+  const selectionNextButtonRef = useRef(null);
 
   useEffect(() => {
     return () => {
@@ -302,28 +304,8 @@ function WizardApp() {
   const handleTramiteSelect = (tramiteId) => {
     setSelectedTramite(tramiteId);
     if (tramiteId === 'reembolso') {
-      setSelectionCanContinue(false);
       setShowTramiteInfoModal(true);
-      return;
     }
-
-    setSelectionCanContinue(true);
-  };
-
-  const handleSelectionNext = () => {
-    if (!selectedTramite) {
-      showToast('Selecciona un trámite para continuar.');
-      return;
-    }
-
-    if (selectedTramite === 'reembolso') {
-      if (!selectionCanContinue) return;
-      dispatch({ type: 'SET_PHASE', value: 'wizard' });
-      dispatch({ type: 'SET_STEP', value: 0 });
-      return;
-    }
-
-    showToast('Esta ruta se encuentra reservada por ahora.');
   };
 
   const handleSelectionInfoClose = () => {
@@ -333,7 +315,21 @@ function WizardApp() {
 
   const handleSelectionDocumentsClose = () => {
     setShowTramiteDocumentsModal(false);
-    if (selectedTramite === 'reembolso') setSelectionCanContinue(true);
+    if (selectedTramite === 'reembolso') {
+      setHasViewedReimbursementPopup(true);
+      window.requestAnimationFrame(() => {
+        selectionNextButtonRef.current?.focus();
+      });
+    }
+  };
+
+  const handleSelectionNext = () => {
+    if (selectedTramite !== 'reembolso' || showTramiteInfoModal || showTramiteDocumentsModal || !hasViewedReimbursementPopup) {
+      return;
+    }
+
+    dispatch({ type: 'SET_PHASE', value: 'wizard' });
+    dispatch({ type: 'SET_STEP', value: 0 });
   };
 
   const handleSaveDraft = () => showToast('Borrador guardado localmente.');
@@ -346,17 +342,29 @@ function WizardApp() {
   const handleDocumentsContinue = () => {
     const hasDocuments = state.documents.some((document) => document.files.length > 0);
     const hasObservations = Boolean(state.observations.trim());
+    const hasEmptyDocuments = state.documents.some((document) => document.files.length === 0);
 
     if (!hasDocuments && !hasObservations) {
-      setShowNoDocsModal(true);
+      return;
+    }
+
+    if (!hasDocuments) {
+      setDocsWarningContext('no-docs');
+      setShowDocsWarningModal(true);
+      return;
+    }
+
+    if (hasEmptyDocuments) {
+      setDocsWarningContext('partial');
+      setShowDocsWarningModal(true);
       return;
     }
 
     startValidation();
   };
 
-  const handleNoDocsProceed = () => {
-    setShowNoDocsModal(false);
+  const handleDocsWarningProceed = () => {
+    setShowDocsWarningModal(false);
     startValidation();
   };
 
@@ -589,37 +597,31 @@ function WizardApp() {
     return <TransitionScreen />;
   }
 
+  if (state.phase === 'entry') {
+    return (
+      <div className="min-h-screen bg-[#F7FAFC]">
+        <TramiteSelectionScreen
+          selected={selectedTramite}
+          onSelect={handleTramiteSelect}
+          onNext={handleSelectionNext}
+          nextDisabled={selectedTramite !== 'reembolso' || !hasViewedReimbursementPopup || showTramiteInfoModal || showTramiteDocumentsModal}
+          nextButtonRef={selectionNextButtonRef}
+        />
+        <InfoIntroModal open={showTramiteInfoModal} onContinue={handleSelectionInfoClose} />
+        <InfoModal open={showTramiteDocumentsModal} onClose={handleSelectionDocumentsClose} />
+      </div>
+    );
+  }
+
   return (
-    <div className="relative min-h-screen overflow-hidden">
-      <div className="absolute inset-x-0 top-0 h-[26rem] bg-hero-glow opacity-90" />
-      <div className="absolute inset-0 bg-hero-grid bg-[length:22px_22px] opacity-25" />
+    <div className="min-h-screen bg-[#F7FAFC] text-[#181C1E]">
+      <header className="border-b border-[#E0E6ED] bg-white">
+        <div className="mx-auto flex w-full max-w-[1100px] items-center justify-center px-6 py-6 sm:py-8">
+          <p className="font-display text-[26px] font-semibold tracking-tight text-[#003781] sm:text-[30px]">Allianz México</p>
+        </div>
+      </header>
 
-      <main className="relative mx-auto flex min-h-screen w-full max-w-7xl flex-col px-4 py-4 sm:px-6 lg:px-8">
-        <header className="glass-panel sticky top-3 z-20 rounded-[2rem] border border-white/70 px-4 py-4 shadow-sm sm:px-6">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-700 to-indigo-800 text-sm font-black text-white shadow-glow">
-                A
-              </div>
-              <div>
-                <p className="text-xs font-bold uppercase tracking-[0.24em] text-sky-700">[Aseguradora] Siniestros GMM</p>
-                <h1 className="text-lg font-extrabold text-slate-900 sm:text-xl">Flujo de Reembolso · Wizard navegable</h1>
-                <p className="mt-1 text-sm leading-6 text-slate-600">
-                  Portal público para documentación, validación inteligente y revisión del trámite.
-                </p>
-              </div>
-            </div>
-          </div>
-        </header>
-
-        {state.phase === 'entry' && (
-          <TramiteSelectionScreen
-            selected={selectedTramite}
-            onSelect={handleTramiteSelect}
-            onNext={handleSelectionNext}
-            canContinue={selectionCanContinue}
-          />
-        )}
+      <main className="mx-auto flex min-h-screen w-full max-w-[1100px] flex-col px-6 py-6 sm:py-8">
 
         {state.phase === 'wizard' && (
           <div className="mt-4">
@@ -638,13 +640,17 @@ function WizardApp() {
       <InfoModal open={showTramiteDocumentsModal} onClose={handleSelectionDocumentsClose} />
 
       <ConfirmationModal
-        open={showNoDocsModal}
-        title="Hemos detectado que no hay documentos ni observaciones"
-        description="¿Deseas continuar con el trámite?"
+        open={showDocsWarningModal}
+        title={docsWarningContext === 'no-docs' ? 'No has adjuntado documentos' : 'Aún tienes documentos vacíos'}
+        description={
+          docsWarningContext === 'no-docs'
+            ? 'Solo tienes observaciones generales. ¿Deseas avanzar sin documentos adjuntos?'
+            : 'Si deseas continuar, los documentos faltantes quedarán pendientes para esta solicitud. ¿Quieres avanzar de todas formas?'
+        }
         confirmLabel="Sí, continuar"
         cancelLabel="No, regresar a documentos"
-        onConfirm={handleNoDocsProceed}
-        onCancel={() => setShowNoDocsModal(false)}
+        onConfirm={handleDocsWarningProceed}
+        onCancel={() => setShowDocsWarningModal(false)}
       />
 
       <ConfirmationModal

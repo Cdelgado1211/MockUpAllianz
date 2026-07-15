@@ -10,22 +10,34 @@ export const tramiteOptions = [
   {
     id: 'reembolso',
     label: 'Reembolso',
-    description: 'Trámite de reembolso de gastos médicos con carga documental y validación automática.'
+    description: 'Solicita el pago de tus facturas médicas y gastos hospitalarios de forma digital.',
+    actionLabel: 'Iniciar solicitud',
+    badge: '',
+    available: true
   },
   {
     id: 'cirugia_programada',
     label: 'Cirugía Programada',
-    description: 'Ruta reservada para cirugías programadas. Disponible próximamente.'
+    description: 'Tramita tu carta de autorización para procedimientos quirúrgicos con anticipación.',
+    actionLabel: 'Más información',
+    badge: 'Próximamente',
+    available: false
   },
   {
     id: 'chatbot',
-    label: 'Chatbot',
-    description: 'Asistencia conversacional para guiar el trámite. Espacio reservado por ahora.'
+    label: 'Chatbot (Asistencia)',
+    description: 'Resuelve tus dudas al instante con nuestro asistente virtual disponible 24/7.',
+    actionLabel: 'Hablar ahora',
+    badge: 'Próximamente',
+    available: false
   },
   {
     id: 'estatus',
     label: 'Consultar estatus',
-    description: 'Consulta del estado del trámite. Ruta reservada para una fase posterior.'
+    description: 'Rastrea el progreso de tus trámites actuales en tiempo real.',
+    actionLabel: 'Ver detalles',
+    badge: 'Próximamente',
+    available: false
   }
 ];
 

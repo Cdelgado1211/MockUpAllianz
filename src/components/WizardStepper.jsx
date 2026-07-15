@@ -1,81 +1,91 @@
+import { CheckIcon } from './Icon';
 import { wizardSteps } from '../data/mockReembolso';
 
-export default function WizardStepper({ currentStep, onStepClick, completedSteps = [] }) {
+function StepCircle({ index, active, completed }) {
+  if (completed) {
+    return (
+      <span
+        className="flex h-12 w-12 items-center justify-center rounded-full border-2 text-[#1D6B35] shadow-[0_2px_8px_rgba(29,107,53,0.12)]"
+        style={{ borderColor: '#CFE8D5', backgroundColor: '#E6F4EA' }}
+      >
+        <CheckIcon className="h-5 w-5" />
+      </span>
+    );
+  }
+
+  if (active) {
+    return (
+      <span
+        className="flex h-12 w-12 items-center justify-center rounded-full border-2 text-[15px] font-bold text-white shadow-[0_4px_14px_rgba(0,55,129,0.20)]"
+        style={{ borderColor: '#003781', backgroundColor: '#003781', color: '#FFFFFF' }}
+      >
+        <span className="translate-y-px">{index}</span>
+      </span>
+    );
+  }
+
   return (
-    <nav className="rounded-[2rem] border border-white/70 bg-white/90 p-3 shadow-sm backdrop-blur-sm">
-      <div className="hidden gap-2 lg:grid lg:grid-cols-5">
-        {wizardSteps.map((step, index) => {
-          const isActive = currentStep === index;
-          const isCompleted = completedSteps.includes(index);
-          const disabled = index > currentStep;
+    <span
+      className="flex h-12 w-12 items-center justify-center rounded-full border-2 text-[15px] font-bold text-[#434751]"
+      style={{ borderColor: '#C7CDD6', backgroundColor: '#F2F4F7' }}
+    >
+      <span className="translate-y-px">{index}</span>
+    </span>
+  );
+}
+
+export default function WizardStepper({ steps = wizardSteps, currentStep = 0, onStepClick = () => {}, completedSteps = [] }) {
+  return (
+    <nav
+      aria-label="Progreso del trámite"
+      className="w-full overflow-x-auto rounded-[18px] border border-[#E0E6ED] bg-white px-6 py-5 shadow-sm sm:px-8"
+      style={{ minHeight: 'auto' }}
+    >
+      <ol
+        className="relative min-w-[760px]"
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(5, minmax(0, 1fr))',
+          alignItems: 'start',
+          gap: 0
+        }}
+      >
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute z-0 h-[2px] bg-[#C7CDD6]"
+          style={{ left: '8%', right: '8%', top: '23px' }}
+        />
+
+        {steps.map((step, index) => {
+          const stepNumber = index + 1;
+          const isActive = index === currentStep;
+          const isCompleted = index < currentStep || completedSteps.includes(index);
 
           return (
-            <button
-              key={step.id}
-              type="button"
-              onClick={() => onStepClick(index)}
-              disabled={disabled}
-              className={`focus-ring flex items-center gap-3 rounded-2xl px-4 py-3 text-left transition ${
-                isActive
-                  ? 'bg-sky-700 text-white shadow-glow'
-                  : isCompleted
-                    ? 'bg-emerald-50 text-emerald-900'
-                    : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
-              } ${disabled ? 'cursor-not-allowed opacity-60' : ''}`}
-            >
-              <span
-                className={`flex h-9 w-9 items-center justify-center rounded-full text-sm font-black ${
-                  isActive
-                    ? 'bg-white/20 text-white'
-                    : isCompleted
-                      ? 'bg-emerald-600 text-white'
-                      : 'bg-white text-slate-700 ring-1 ring-slate-200'
-                }`}
+            <li key={step.id} className="relative z-10 min-w-0 px-2 text-center">
+              <button
+                type="button"
+                onClick={() => onStepClick(index)}
+                disabled={index > currentStep}
+                aria-current={isActive ? 'step' : undefined}
+                className={`focus-ring flex flex-col items-center justify-start ${index > currentStep ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+                style={{ width: '100%' }}
               >
-                {index + 1}
-              </span>
-              <span className="min-w-0">
-                <span className="block text-sm font-extrabold">{step.label}</span>
-                <span className={`block text-xs ${isActive ? 'text-sky-100' : 'text-slate-500'}`}>
-                  {isActive ? 'Paso actual' : isCompleted ? 'Completado' : 'Pendiente'}
+                <StepCircle index={stepNumber} active={isActive} completed={isCompleted} />
+
+                <span
+                  className={`mt-2.5 block max-w-[150px] text-[14px] leading-5 ${
+                    isActive ? 'font-semibold text-[#003781]' : isCompleted ? 'font-medium text-[#475467]' : 'font-medium text-[#434751]'
+                  }`}
+                  style={isActive ? { color: '#003781' } : undefined}
+                >
+                  {step.label}
                 </span>
-              </span>
-            </button>
+              </button>
+            </li>
           );
         })}
-      </div>
-
-      <div className="flex items-center justify-between gap-3 lg:hidden">
-        <div>
-          <p className="text-xs font-bold uppercase tracking-[0.22em] text-sky-700">Progreso</p>
-          <p className="mt-1 text-sm font-extrabold text-slate-900">
-            Paso {currentStep + 1} de {wizardSteps.length}: {wizardSteps[currentStep].label}
-          </p>
-        </div>
-        <div className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-700">
-          {Math.round(((currentStep + 1) / wizardSteps.length) * 100)}%
-        </div>
-      </div>
-
-      <div className="mt-3 flex gap-2 lg:hidden">
-        {wizardSteps.map((step, index) => {
-          const isActive = currentStep === index;
-          const isCompleted = completedSteps.includes(index);
-          const disabled = index > currentStep;
-          return (
-            <button
-              key={step.id}
-              type="button"
-              onClick={() => onStepClick(index)}
-              disabled={disabled}
-              className={`h-2.5 flex-1 rounded-full transition ${
-                isActive ? 'bg-sky-700' : isCompleted ? 'bg-emerald-500' : 'bg-slate-200'
-              } ${disabled ? 'cursor-not-allowed opacity-50' : ''}`}
-              aria-label={step.label}
-            />
-          );
-        })}
-      </div>
+      </ol>
     </nav>
   );
 }

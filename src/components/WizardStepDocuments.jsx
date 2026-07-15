@@ -12,6 +12,10 @@ export default function WizardStepDocuments({
   onPrimary,
   highlightedDocumentId
 }) {
+  const hasDocuments = documents.some((document) => document.files.length > 0);
+  const canContinueWithoutDocuments = Boolean(observations.trim());
+  const primaryDisabled = !hasDocuments && !canContinueWithoutDocuments;
+
   return (
     <section className="space-y-4">
       <div className="space-y-5">
@@ -38,6 +42,9 @@ export default function WizardStepDocuments({
             placeholder="Escribe cualquier observación que ayude a contextualizar tu trámite..."
             className="focus-ring w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 placeholder:text-slate-400"
           />
+          <p className="mt-2 text-xs text-slate-500">
+            Si no adjuntas documentos, escribe observaciones generales para poder continuar.
+          </p>
         </label>
       </div>
 
@@ -46,6 +53,7 @@ export default function WizardStepDocuments({
         onSaveDraft={onSaveDraft}
         onPrimary={onPrimary}
         primaryLabel="Continuar"
+        primaryDisabled={primaryDisabled}
       />
     </section>
   );
