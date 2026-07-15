@@ -15,7 +15,6 @@ export default function WizardStepValidation({
   onPrimary,
   onResolveAlert,
   onEditDocument,
-  onViewDocument,
   onIgnoreAlert
 }) {
   return (
@@ -30,7 +29,6 @@ export default function WizardStepValidation({
           alerts={alerts}
           onResolveAlert={onResolveAlert}
           onEditDocument={onEditDocument}
-          onViewDocument={onViewDocument}
           onIgnoreAlert={onIgnoreAlert}
         />
       )}

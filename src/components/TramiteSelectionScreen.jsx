@@ -19,7 +19,9 @@ function TramiteCard({ option, selected, onSelect }) {
       aria-label={`${option.label}${isComingSoon ? ', próximo disponible' : ''}`}
       aria-pressed={selected}
       className={`group flex h-full min-h-[372px] w-full max-w-[320px] flex-col justify-between rounded-[12px] border bg-white p-6 text-left shadow-[0_1px_2px_rgba(24,28,30,0.05)] transition duration-300 ease-out focus-ring hover:-translate-y-1 hover:border-[#005A9C]/55 hover:shadow-[0_12px_30px_rgba(0,35,86,0.12)] ${
-        isActive ? 'border-[#D8DEE7] bg-[#F8FBFF] ring-1 ring-[#005A9C]/10 shadow-[0_10px_24px_rgba(0,35,86,0.10)]' : 'border-[#E0E6ED]'
+        isActive
+          ? 'border-[#003781] bg-[#F4F8FF] ring-2 ring-[#003781]/15 shadow-[0_14px_28px_rgba(0,55,129,0.14)]'
+          : 'border-[#E0E6ED]'
       }`}
       onClick={onSelect}
     >
@@ -28,7 +30,7 @@ function TramiteCard({ option, selected, onSelect }) {
           <div className="flex items-start justify-between gap-4">
             <span
               className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl transition duration-300 ${
-                isActive ? 'bg-[#EAF2FF] text-[#003781]' : 'bg-[#F3F7FB] text-[#005A9C] group-hover:scale-[1.03]'
+                isActive ? 'bg-[#003781] text-white' : 'bg-[#F3F7FB] text-[#005A9C] group-hover:scale-[1.03]'
               }`}
             >
               <Icon className="h-8 w-8" />
@@ -36,7 +38,7 @@ function TramiteCard({ option, selected, onSelect }) {
 
             <ChevronRightIcon
               className={`mt-1 h-5 w-5 shrink-0 transition duration-300 ${
-                isActive ? 'text-[#005A9C]' : 'text-[#9AA3B2] group-hover:translate-x-0.5 group-hover:text-[#005A9C]'
+                isActive ? 'text-[#003781]' : 'text-[#9AA3B2] group-hover:translate-x-0.5 group-hover:text-[#005A9C]'
               }`}
             />
           </div>

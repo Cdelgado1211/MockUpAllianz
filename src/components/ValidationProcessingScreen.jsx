@@ -1,19 +1,21 @@
 import { validationStages } from '../data/mockReembolso';
-import { SparkIcon } from './Icon';
+import { CheckIcon, SparkIcon } from './Icon';
 
 export default function ValidationProcessingScreen({ stageIndex, progress }) {
   return (
-    <section className="rounded-[2rem] border border-sky-200 bg-white p-5 shadow-sm sm:p-6">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+    <section className="mx-auto w-full max-w-[980px] rounded-[20px] border border-[#E0E6ED] bg-white p-5 shadow-sm sm:p-6">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <p className="text-xs font-bold uppercase tracking-[0.24em] text-sky-700">Sección 2 · Validación</p>
-          <h2 className="mt-1 text-2xl font-extrabold text-slate-900">Procesando tus documentos</h2>
-          <p className="mt-2 text-sm leading-6 text-slate-600">
-            Estamos simulando la lectura con IA para identificar información, comparar datos y preparar resultados.
+          <p className="text-xs font-bold uppercase tracking-[0.24em] text-[#006494]">Validación inteligente</p>
+          <h2 className="mt-1 text-[22px] font-semibold leading-7 text-[#181C1E] sm:text-[28px]">
+            Estamos validando tus documentos
+          </h2>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-[#434751]">
+            Analizamos la información cargada para identificar coincidencias, diferencias y observaciones antes de continuar.
           </p>
         </div>
 
-        <div className="inline-flex items-center gap-2 rounded-full bg-sky-50 px-4 py-2 text-sm font-bold text-sky-800">
+        <div className="inline-flex items-center gap-2 rounded-full bg-[#EFF6FF] px-4 py-2 text-sm font-semibold text-[#003781]">
           <SparkIcon className="h-4 w-4 animate-pulse" />
           Análisis automático activo
         </div>
@@ -22,28 +24,31 @@ export default function ValidationProcessingScreen({ stageIndex, progress }) {
       <div className="mt-6 space-y-4">
         <div className="h-3 overflow-hidden rounded-full bg-slate-100">
           <div
-            className="h-full rounded-full bg-gradient-to-r from-sky-500 via-blue-600 to-indigo-700 transition-all duration-500"
+            className="h-full rounded-full bg-gradient-to-r from-[#006494] via-[#003781] to-[#002356] transition-all duration-500"
             style={{ width: `${progress}%` }}
           />
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
           {validationStages.map((stage, index) => {
             const isActive = stageIndex === index;
             const isDone = stageIndex > index;
             return (
               <div
                 key={stage}
-                className={`rounded-2xl border px-4 py-3 text-sm font-semibold transition ${
+                className={`rounded-[14px] border px-4 py-3 text-sm font-semibold transition ${
                   isActive
-                    ? 'border-sky-300 bg-sky-50 text-sky-900 shadow-sm'
+                    ? 'border-[#C7D8F1] bg-[#EFF6FF] text-[#003781] shadow-sm'
                     : isDone
-                      ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
-                      : 'border-slate-200 bg-slate-50 text-slate-500'
+                      ? 'border-[#CFE8D5] bg-[#E6F4EA] text-[#137333]'
+                      : 'border-[#E0E6ED] bg-[#F7FAFC] text-[#434751]'
                 }`}
               >
-                <div className="text-xs uppercase tracking-[0.2em] opacity-70">Paso {index + 1}</div>
-                <div className="mt-1">{stage}</div>
+                <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.18em] opacity-70">
+                  {isDone ? <CheckIcon className="h-3.5 w-3.5" /> : <span className="inline-flex h-3.5 w-3.5 items-center justify-center rounded-full border border-current text-[9px] font-bold">{index + 1}</span>}
+                  <span>Paso {index + 1}</span>
+                </div>
+                <div className="mt-1 text-[13px] font-semibold leading-5">{stage}</div>
               </div>
             );
           })}

@@ -253,6 +253,13 @@ function WizardApp() {
     return () => clearTimeout(timerId);
   }, [highlightedDocumentId]);
 
+  useEffect(() => {
+    if (state.phase !== 'wizard') return;
+    window.requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    });
+  }, [state.phase, state.currentStep]);
+
   const contactErrors = useMemo(() => getContactErrors(state.contact), [state.contact]);
   const claimError = useMemo(() => getClaimErrors(state.claimant), [state.claimant]);
   const reviewBlockedReason = useMemo(() => getReviewBlockedReason(state), [state.contact, state.person, state.claimant]);
@@ -262,6 +269,8 @@ function WizardApp() {
   const validatedCount = countDocumentsByStatus(state.documents, 'validated');
   const reviewCount = countDocumentsByStatus(state.documents, 'requires_review');
   const illegibleCount = countDocumentsByStatus(state.documents, 'illegible');
+  const pendingCount = countDocumentsByStatus(state.documents, 'pending');
+  const processingCount = countDocumentsByStatus(state.documents, 'processing');
   const activeAlerts = state.alerts.filter((alert) => alert.status === 'active' && !state.ignoredAlerts.includes(alert.id));
   const correctDocuments = state.documents.filter((document) => document.status === 'validated');
   const reviewDocuments = state.documents.filter((document) => document.status === 'requires_review' || document.status === 'illegible');
@@ -271,6 +280,8 @@ function WizardApp() {
     validated: validatedCount,
     review: reviewCount,
     illegible: illegibleCount,
+    pending: pendingCount,
+    processing: processingCount,
     alerts: activeAlerts.length
   };
 
@@ -365,6 +376,12 @@ function WizardApp() {
 
   const handleDocsWarningProceed = () => {
     setShowDocsWarningModal(false);
+    if (docsWarningContext === 'no-docs') {
+      dispatch({ type: 'RESET_VALIDATION' });
+      dispatch({ type: 'SET_STEP', value: 2 });
+      return;
+    }
+
     startValidation();
   };
 
@@ -516,7 +533,6 @@ function WizardApp() {
           onPrimary={handleValidationContinue}
           onResolveAlert={handleAlertResolve}
           onEditDocument={handleEditDocument}
-          onViewDocument={handlePreviewFile}
           onIgnoreAlert={handleAlertIgnore}
         />
       );
@@ -624,7 +640,7 @@ function WizardApp() {
       <main className="mx-auto flex min-h-screen w-full max-w-[1100px] flex-col px-6 py-6 sm:py-8">
 
         {state.phase === 'wizard' && (
-          <div className="mt-4">
+          <div className="mx-auto mt-4 w-full max-w-[980px]">
             <WizardStepper
               currentStep={state.currentStep}
               onStepClick={handleNavigateStep}
@@ -633,7 +649,7 @@ function WizardApp() {
           </div>
         )}
 
-        {state.phase === 'wizard' && <section className="mt-4 flex-1">{renderWizardStep()}</section>}
+        {state.phase === 'wizard' && <section className="mx-auto mt-4 flex-1 w-full max-w-[980px]">{renderWizardStep()}</section>}
       </main>
 
       <InfoIntroModal open={showTramiteInfoModal} onContinue={handleSelectionInfoClose} />
