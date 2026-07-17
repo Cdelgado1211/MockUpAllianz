@@ -99,13 +99,15 @@ export default function ChatContextPanel({
       </div>
 
       {collapsed ? (
-        <div className="flex flex-1 items-center justify-center px-3 py-6 text-center">
-          <div>
-            <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-2xl bg-[#EFF6FF] text-[#003781]">
-              <SparkIcon className="h-5 w-5" />
-            </div>
-            <p className="mt-3 text-xs font-semibold text-[#434751]">Panel de resumen</p>
-          </div>
+        <div className="flex flex-1 items-start justify-center px-3 py-4">
+          <button
+            type="button"
+            className="focus-ring inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-[#DDE5EF] bg-white text-[#003781] transition hover:bg-[#F4F8FF]"
+            onClick={onToggleCollapsed}
+            aria-label="Expandir panel contextual"
+          >
+            <SparkIcon className="h-5 w-5" />
+          </button>
         </div>
       ) : (
         <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4">

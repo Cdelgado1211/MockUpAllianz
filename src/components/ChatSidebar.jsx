@@ -1,11 +1,13 @@
 import {
-  ArrowRightIcon,
   ChevronRightIcon,
+  HomeIcon,
   MedicalServicesIcon,
   PaymentsIcon,
+  QuestionIcon,
+  SidebarToggleIcon,
   SmartToyIcon,
-  TimelineIcon,
-  SparkIcon
+  SparkIcon,
+  TimelineIcon
 } from './Icon';
 import { chatbotHistoryItems } from '../data/mockChatbot';
 
@@ -18,42 +20,39 @@ const iconMap = {
   'fuera-de-alcance': TimelineIcon
 };
 
-function HistoryItem({ item, selected, onClick }) {
-  const Icon = iconMap[item.id] ?? SmartToyIcon;
-
+function RailAction({ icon: Icon, label, active = false, collapsed = false, onClick }) {
   return (
     <button
       type="button"
-      className={`group w-full rounded-[18px] border px-4 py-3 text-left transition focus-ring ${
-        selected
-          ? 'border-[#003781] bg-[#F4F8FF] shadow-sm'
-          : 'border-[#E0E6ED] bg-white hover:-translate-y-0.5 hover:border-[#C7D8F1] hover:shadow-sm'
+      className={`group relative flex items-center gap-3 rounded-2xl border transition focus-ring ${
+        collapsed ? 'h-12 w-12 justify-center px-0' : 'h-12 w-full justify-start px-3'
+      } ${
+        active
+          ? 'border-[#003781] bg-[#003781] text-white shadow-[0_10px_18px_rgba(0,55,129,0.16)]'
+          : 'border-[#DDE5EF] bg-white text-[#003781] hover:-translate-y-0.5 hover:border-[#C7D8F1] hover:bg-[#F4F8FF]'
       }`}
       onClick={onClick}
+      title={label}
+      aria-pressed={active}
     >
-      <div className="flex items-start gap-3">
-        <div
-          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl ${
-            selected ? 'bg-[#003781] text-white' : 'bg-[#F3F7FB] text-[#003781]'
-          }`}
-          aria-hidden="true"
-        >
-          <Icon className="h-5 w-5" />
-        </div>
-
-        <div className="min-w-0 flex-1">
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0">
-              <p className={`text-sm font-semibold leading-5 ${selected ? 'text-[#002356]' : 'text-[#181C1E]'}`}>
-                {item.title}
-              </p>
-              <p className="mt-0.5 text-xs leading-5 text-[#6B7280]">{item.description}</p>
-            </div>
-            <ChevronRightIcon className={`mt-0.5 h-4 w-4 shrink-0 ${selected ? 'text-[#003781]' : 'text-[#A5ACB9]'}`} />
-          </div>
-        </div>
-      </div>
+      <Icon className="h-5 w-5 shrink-0" />
+      {!collapsed ? <span className="text-sm font-semibold leading-5">{label}</span> : null}
+      {active && !collapsed ? <span className="absolute left-0 top-1/2 h-6 w-1 -translate-y-1/2 rounded-r-full bg-[#003781]" aria-hidden="true" /> : null}
     </button>
+  );
+}
+
+function ConversationItem({ item, active, collapsed, onClick }) {
+  const Icon = iconMap[item.id] ?? SmartToyIcon;
+
+  return (
+    <RailAction
+      icon={Icon}
+      label={item.title}
+      active={active}
+      collapsed={collapsed}
+      onClick={onClick}
+    />
   );
 }
 
@@ -67,84 +66,85 @@ export default function ChatSidebar({
 }) {
   return (
     <aside
-      className={`hidden h-full shrink-0 border-r border-[#DDE5EF] bg-[#F7FAFC]/95 backdrop-blur-sm lg:flex ${
-        collapsed ? 'w-[88px]' : 'w-[320px]'
+      className={`hidden h-full shrink-0 border-r border-[#DDE5EF] bg-[#F8FAFD] lg:flex ${
+        collapsed ? 'w-[64px]' : 'w-[292px]'
       } flex-col transition-all duration-300`}
     >
-      <div className="border-b border-[#E0E6ED] px-4 py-4">
-        <div className={`flex items-center gap-3 ${collapsed ? 'justify-center' : ''}`}>
-          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#003781] text-white shadow-sm">
-            <SmartToyIcon className="h-5 w-5" />
+      {!collapsed ? (
+        <div className="flex items-center justify-between gap-3 border-b border-[#E0E6ED] px-4 py-4">
+          <div className="min-w-0">
+            <p className="font-display text-[17px] font-semibold leading-tight text-[#003781]">Allianz México</p>
+            <p className="text-xs leading-5 text-[#6B7280]">Asistente de Siniestros GMM</p>
           </div>
-          {!collapsed ? (
-            <div className="min-w-0">
-              <p className="font-display text-[18px] font-semibold leading-tight text-[#003781]">Allianz México</p>
-              <p className="text-xs leading-5 text-[#6B7280]">Asistente de Siniestros GMM</p>
-            </div>
-          ) : null}
-        </div>
 
-        <div className="mt-4 flex gap-2">
           <button
             type="button"
-            className={`focus-ring inline-flex h-10 flex-1 items-center justify-center rounded-full bg-[#003781] px-3 text-xs font-semibold text-white transition hover:bg-[#002356] ${
-              collapsed ? 'px-0' : ''
-            }`}
-            onClick={onNewConversation}
-          >
-            {collapsed ? <SparkIcon className="h-4 w-4" /> : 'Nueva conversación'}
-          </button>
-          <button
-            type="button"
-            className="focus-ring inline-flex h-10 w-10 items-center justify-center rounded-full border border-[#DCE3EC] bg-white text-[#003781] transition hover:bg-[#F4F8FF]"
+            className="focus-ring inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-[#E0E6ED] bg-white text-[#003781] shadow-sm transition hover:bg-[#F4F8FF]"
             onClick={onToggleCollapsed}
-            aria-label={collapsed ? 'Expandir barra lateral' : 'Contraer barra lateral'}
+            aria-label="Cerrar barra lateral"
+            title="Cerrar barra lateral"
           >
-            <ArrowRightIcon className={`h-4 w-4 transition ${collapsed ? 'rotate-180' : ''}`} />
+            <SidebarToggleIcon className="h-4 w-4" />
           </button>
         </div>
-      </div>
+      ) : null}
 
-      <div className="flex-1 space-y-5 overflow-y-auto px-4 py-4">
-        <div>
-          <p className={`text-[11px] font-bold uppercase tracking-[0.22em] text-[#006494] ${collapsed ? 'text-center' : ''}`}>
-            Historial
-          </p>
-          <div className="mt-3 space-y-2">
-            {chatbotHistoryItems.map((item) => (
-              <HistoryItem
-                key={item.id}
-                item={item}
-                selected={activePresetId === item.id}
-                onClick={() => onSelectPreset(item.id)}
-              />
-            ))}
-          </div>
+      <div className={`flex-1 overflow-y-auto py-4 ${collapsed ? 'px-2' : 'px-3'}`}>
+        <div className="space-y-2">
+          {collapsed ? (
+            <RailAction
+              icon={SidebarToggleIcon}
+              label="Abrir barra lateral"
+              active={false}
+              collapsed={true}
+              onClick={onToggleCollapsed}
+            />
+          ) : null}
+          <RailAction
+            icon={SparkIcon}
+            label="Nueva conversación"
+            active={activePresetId === 'welcome'}
+            collapsed={collapsed}
+            onClick={onNewConversation}
+          />
+          {!collapsed ? (
+            <div className="pt-3">
+              <p className="px-2 text-[11px] font-bold uppercase tracking-[0.22em] text-[#006494]">Conversaciones</p>
+              <div className="mt-3 space-y-2">
+                {chatbotHistoryItems.map((item) => (
+                  <ConversationItem
+                    key={item.id}
+                    item={item}
+                    active={activePresetId === item.id}
+                    collapsed={collapsed}
+                    onClick={() => onSelectPreset(item.id)}
+                  />
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="pt-3">
+              <div className="space-y-2">
+                {chatbotHistoryItems.map((item) => (
+                  <ConversationItem
+                    key={item.id}
+                    item={item}
+                    active={activePresetId === item.id}
+                    collapsed={collapsed}
+                    onClick={() => onSelectPreset(item.id)}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
-        {!collapsed ? (
-          <div className="rounded-[20px] border border-[#DDE5EF] bg-white p-4 shadow-sm">
-            <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-[#006494]">Accesos rápidos</p>
-            <div className="mt-3 space-y-2">
-              {[
-                { label: 'Inicio', action: onGoHome },
-                { label: 'Mis trámites', action: onGoHome },
-                { label: 'Consultar estatus', action: onGoHome },
-                { label: 'Ayuda', action: onGoHome }
-              ].map((item) => (
-                <button
-                  key={item.label}
-                  type="button"
-                  className="focus-ring flex w-full items-center justify-between rounded-2xl border border-[#E0E6ED] bg-[#F7FAFC] px-3 py-3 text-sm font-semibold text-[#003781] transition hover:border-[#C7D8F1] hover:bg-white"
-                  onClick={item.action}
-                >
-                  <span>{item.label}</span>
-                  <ChevronRightIcon className="h-4 w-4 text-[#A5ACB9]" />
-                </button>
-              ))}
-            </div>
-          </div>
-        ) : null}
+        <div className="my-4 border-t border-[#E0E6ED]" />
+
+        <div className="space-y-2">
+          <RailAction icon={HomeIcon} label="Inicio" active={false} collapsed={collapsed} onClick={onGoHome} />
+          <RailAction icon={QuestionIcon} label="Ayuda" active={false} collapsed={collapsed} onClick={onGoHome} />
+        </div>
       </div>
     </aside>
   );

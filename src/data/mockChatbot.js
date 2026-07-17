@@ -213,13 +213,7 @@ export function createChatbotPreset(presetId = 'welcome') {
     scenario,
     messages:
       preset.id === 'welcome'
-        ? [
-            {
-              id: 'assistant-hello',
-              role: 'assistant',
-              text: 'Hola, soy el asistente de Siniestros GMM de Allianz México. Puedo ayudarte a conocer los requisitos o a iniciar un trámite.'
-            }
-          ]
+        ? []
         : preset.id === 'reembolso-review'
           ? [
               { id: 'assistant-hello', role: 'assistant', text: 'Hola, soy el asistente de Siniestros GMM de Allianz México.' },

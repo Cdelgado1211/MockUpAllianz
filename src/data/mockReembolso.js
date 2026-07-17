@@ -364,9 +364,10 @@ export const initialWizardState = {
   }
 };
 
-export function createInitialWizardState() {
+export function createInitialWizardState(phase = 'entry') {
   return {
     ...initialWizardState,
+    phase,
     documents: cloneInitialDocuments(),
     alerts: demoAlerts.map((alert) => ({ ...alert })),
     extracted: {

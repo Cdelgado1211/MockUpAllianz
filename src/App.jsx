@@ -15,6 +15,20 @@ import WizardStepValidation from './components/WizardStepValidation';
 import { CheckIcon } from './components/Icon';
 import { createInitialWizardState, createMockFileMeta, countDocumentsByStatus, getLoadedDocuments, validationStages } from './data/mockReembolso';
 
+function getTramiteFromPath(pathname) {
+  if (pathname === '/reembolso') return 'reembolso';
+  if (pathname === '/cirugia') return 'cirugia_programada';
+  if (pathname === '/chatbot') return 'chatbot';
+  return null;
+}
+
+function getPathForTramite(tramite) {
+  if (tramite === 'reembolso') return '/reembolso';
+  if (tramite === 'cirugia_programada') return '/cirugia';
+  if (tramite === 'chatbot') return '/chatbot';
+  return '/';
+}
+
 function reducer(state, action) {
   switch (action.type) {
     case 'SET_PHASE':
@@ -243,13 +257,14 @@ function getRelatedDocumentId(alert) {
 }
 
 function WizardApp() {
-  const [state, dispatch] = useReducer(reducer, undefined, createInitialWizardState);
+  const initialTramite = getTramiteFromPath(window.location.pathname);
+  const [state, dispatch] = useReducer(reducer, undefined, () => createInitialWizardState(initialTramite === 'chatbot' ? 'chatbot' : 'entry'));
   const [showDocsWarningModal, setShowDocsWarningModal] = useState(false);
   const [docsWarningContext, setDocsWarningContext] = useState('partial');
   const [showAlertContinueModal, setShowAlertContinueModal] = useState(false);
   const [filePreview, setFilePreview] = useState(null);
   const [highlightedDocumentId, setHighlightedDocumentId] = useState(null);
-  const [selectedTramite, setSelectedTramite] = useState(null);
+  const [selectedTramite, setSelectedTramite] = useState(initialTramite === 'chatbot' ? null : initialTramite);
   const [hasViewedReimbursementPopup, setHasViewedReimbursementPopup] = useState(false);
   const [showTramiteInfoModal, setShowTramiteInfoModal] = useState(false);
   const [showTramiteDocumentsModal, setShowTramiteDocumentsModal] = useState(false);
@@ -270,6 +285,24 @@ function WizardApp() {
       if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    const syncFromLocation = () => {
+      const routeTramite = getTramiteFromPath(window.location.pathname);
+      setSelectedTramite(routeTramite === 'chatbot' ? null : routeTramite);
+      if (routeTramite === 'chatbot') {
+        dispatch({ type: 'SET_PHASE', value: 'chatbot' });
+        return;
+      }
+
+      if (state.phase === 'chatbot') {
+        dispatch({ type: 'SET_PHASE', value: 'entry' });
+      }
+    };
+
+    window.addEventListener('popstate', syncFromLocation);
+    return () => window.removeEventListener('popstate', syncFromLocation);
+  }, [state.phase]);
 
   useEffect(() => {
     if (state.phase !== 'wizard' || state.currentStep !== 1 || state.validationPhase !== 'processing') return undefined;
@@ -374,6 +407,11 @@ function WizardApp() {
     setHasViewedReimbursementPopup(false);
     setShowTramiteInfoModal(false);
     setShowTramiteDocumentsModal(false);
+    window.history.pushState({}, '', getPathForTramite(tramiteId));
+    if (tramiteId === 'chatbot') {
+      dispatch({ type: 'SET_PHASE', value: 'chatbot' });
+      return;
+    }
     if (tramiteId === 'reembolso' || tramiteId === 'cirugia_programada') {
       setShowTramiteInfoModal(true);
     }
@@ -399,11 +437,7 @@ function WizardApp() {
       return;
     }
 
-    if (selectedTramite === 'chatbot') {
-      dispatch({ type: 'SET_PHASE', value: 'chatbot' });
-      return;
-    }
-
+    window.history.pushState({}, '', getPathForTramite(selectedTramite));
     dispatch({ type: 'SET_PHASE', value: 'wizard' });
     dispatch({ type: 'SET_STEP', value: 0 });
   };
@@ -517,6 +551,7 @@ function WizardApp() {
     setHasViewedReimbursementPopup(false);
     setShowTramiteInfoModal(false);
     setShowTramiteDocumentsModal(false);
+    window.history.pushState({}, '', '/');
     dispatch({ type: 'SET_PHASE', value: 'entry' });
     dispatch({ type: 'SET_STEP', value: 0 });
   };

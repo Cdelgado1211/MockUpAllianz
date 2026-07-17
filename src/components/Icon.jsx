@@ -60,6 +60,20 @@ export function DownloadIcon({ className = 'h-4 w-4' }) {
   );
 }
 
+export function PaperclipIcon({ className = 'h-4 w-4' }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
+      <path
+        d="M9.25 11.75 14.5 6.5a3.25 3.25 0 1 1 4.59 4.59l-7.8 7.8a5 5 0 0 1-7.07-7.07l7.8-7.8"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 export function SparkIcon({ className = 'h-5 w-5' }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
@@ -142,6 +156,76 @@ export function ArrowRightIcon({ className = 'h-4 w-4' }) {
     <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
       <path d="M5 12h13" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
       <path d="m13 6 6 6-6 6" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+export function SidebarToggleIcon({ className = 'h-4 w-4' }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
+      <rect
+        x="4.5"
+        y="4.5"
+        width="15"
+        height="15"
+        rx="3"
+        stroke="currentColor"
+        strokeWidth="1.75"
+      />
+      <path
+        d="m14 8-4 4 4 4"
+        stroke="currentColor"
+        strokeWidth="1.9"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+export function BellIcon({ className = 'h-5 w-5' }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
+      <path
+        d="M15.5 17.25h4l-1.15-1.15A2 2 0 0 1 17.75 14.7v-2.95a5.75 5.75 0 1 0-11.5 0v2.95c0 .53-.21 1.04-.6 1.42L4.5 17.25h4"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path d="M9.75 19a2.25 2.25 0 0 0 4.5 0" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+      <circle cx="17.5" cy="5.5" r="1.8" fill="currentColor" />
+    </svg>
+  );
+}
+
+export function ChevronDownIcon({ className = 'h-4 w-4' }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
+      <path d="m6 9 6 6 6-6" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+export function HomeIcon({ className = 'h-5 w-5' }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
+      <path
+        d="m4.5 11.5 7.5-6 7.5 6v8a1.5 1.5 0 0 1-1.5 1.5h-4.5v-5a1.5 1.5 0 0 0-3 0v5H6a1.5 1.5 0 0 1-1.5-1.5v-8Z"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+export function QuestionIcon({ className = 'h-5 w-5' }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
+      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.75" />
+      <path d="M12 16.2v.1" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" />
+      <path d="M9.9 9.4a2.3 2.3 0 1 1 3.9 1.7c-.7.6-1.3 1-1.5 1.9" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }

@@ -70,6 +70,8 @@ function createStartingData() {
     validationStageIndex: 0,
     validationCompleted: false,
     reviewConfirmed: false,
+    sidebarCollapsed: true,
+    contextCollapsed: true,
     folio: `FOLIO-${new Date().getFullYear()}-${Math.floor(Math.random() * 9000 + 1000)}`,
     processingHint: '',
     activeDocumentId: null
@@ -87,8 +89,8 @@ function hydratePreset(presetId = 'welcome') {
     scenario: preset.scenario,
     messages: preset.messages.map((message) => ({ ...message })),
     draft: '',
-    sidebarCollapsed: false,
-    contextCollapsed: false,
+    sidebarCollapsed: true,
+    contextCollapsed: true,
     policy: { ...preset.policy },
     person: { ...preset.person },
     contact: { ...preset.contact },
@@ -916,6 +918,7 @@ export default function ChatbotWorkspace({ onExit }) {
   const canContinueClaim = !claimErrors.sinisterNumber && !claimErrors.attentionPlace && !claimErrors.tramiteType && !claimErrors.observations;
 
   const stageCopy = getStageCopy(state.stage, state.entryMode, state.flow);
+  const isWelcomeEmpty = state.stage === 'welcome' && state.messages.length === 0 && !state.flow;
 
   useEffect(() => {
     if (!threadRef.current) return;
@@ -1230,27 +1233,35 @@ export default function ChatbotWorkspace({ onExit }) {
   };
 
   const renderStageContent = () => {
-    if (state.stage === 'welcome') {
+    if (isWelcomeEmpty) {
       return (
-        <section className="space-y-4">
-          <div className="flex justify-start">
-            <div className="max-w-[760px] rounded-[24px] border border-[#E0E6ED] bg-white px-4 py-3 shadow-sm">
-              <p className="text-sm leading-6 text-[#181C1E]">{stageCopy.title}</p>
-              <p className="mt-1 text-sm leading-6 text-[#434751]">{stageCopy.description}</p>
-            </div>
+        <section className="flex min-h-[calc(100vh-260px)] flex-col items-center justify-center px-4 py-10 sm:px-6 lg:px-8">
+          <div className="w-full max-w-[820px] text-center">
+            <h2 className="mx-auto max-w-4xl text-[clamp(2.6rem,4vw,3.9rem)] font-semibold leading-[1.06] tracking-[-0.04em] text-[#181C1E]">
+              ¿Cómo puedo ayudarte hoy?
+            </h2>
+            <p className="mx-auto mt-5 max-w-[680px] text-[clamp(1rem,1.2vw,1.125rem)] leading-7 text-[#434751]">
+              Puedo orientarte sobre reembolsos, cirugía programada, documentos y el estatus de tu trámite.
+            </p>
           </div>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {chatbotQuickActions.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                className="focus-ring rounded-[20px] border border-[#DDE5EF] bg-white p-4 text-left transition hover:-translate-y-0.5 hover:bg-[#F7FAFC]"
-                onClick={() => handleIntent(item.id)}
-              >
-                <p className="text-sm font-semibold text-[#181C1E]">{item.label}</p>
-                <p className="mt-1 text-xs leading-5 text-[#6B7280]">{item.id === 'info' ? 'Requisitos y documentos necesarios.' : item.id === 'start' ? 'Comienza el trámite desde el chat.' : item.id === 'formats' ? 'Descarga simulada de formatos.' : item.id === 'status' ? 'Consulta aún no disponible.' : 'Canales de apoyo y orientación.'}</p>
-              </button>
-            ))}
+
+          <div className="mt-10 w-full">
+            <div className="mx-auto w-full max-w-[760px]">
+              <ChatComposer
+                value={state.draft}
+                onChange={(value) => dispatch({ type: 'SET_DRAFT', value })}
+                onSend={handleComposerSend}
+                onAttach={(files) => {
+                  if (!state.flow) return;
+                  const targetDocument = state.documents.find((document) => document.status === 'pending') ?? state.documents[0];
+                  if (targetDocument) handleDocumentUpload(targetDocument.id, files);
+                }}
+                placeholder="Pregunta a Allianz México"
+                suggestions={chatbotQuickActions}
+                onSuggestion={handleComposerSuggestion}
+                variant="hero"
+              />
+            </div>
           </div>
         </section>
       );
@@ -1837,33 +1848,38 @@ export default function ChatbotWorkspace({ onExit }) {
               </div>
             </div>
 
-            <ChatComposer
-              value={state.draft}
-              onChange={(value) => dispatch({ type: 'SET_DRAFT', value })}
-              onSend={handleComposerSend}
-              onAttach={(files) => {
-                if (!state.flow) return;
-                const targetDocument = state.documents.find((document) => document.status === 'pending') ?? state.documents[0];
-                if (targetDocument) handleDocumentUpload(targetDocument.id, files);
-              }}
-              suggestions={chatbotQuickActions}
-              onSuggestion={handleComposerSuggestion}
-            />
+            {!isWelcomeEmpty ? (
+              <ChatComposer
+                value={state.draft}
+                onChange={(value) => dispatch({ type: 'SET_DRAFT', value })}
+                onSend={handleComposerSend}
+                onAttach={(files) => {
+                  if (!state.flow) return;
+                  const targetDocument = state.documents.find((document) => document.status === 'pending') ?? state.documents[0];
+                  if (targetDocument) handleDocumentUpload(targetDocument.id, files);
+                }}
+                placeholder="Escribe tu mensaje o selecciona una opción"
+                suggestions={chatbotQuickActions}
+                onSuggestion={handleComposerSuggestion}
+              />
+            ) : null}
           </div>
 
-          <ChatContextPanel
-            collapsed={state.contextCollapsed}
-            onToggleCollapsed={() => dispatch({ type: 'SET_CONTEXT_COLLAPSED', value: !state.contextCollapsed })}
-            flow={state.flow}
-            stage={state.stage}
-            progressIndex={progressIndex}
-            documents={state.documents}
-            alerts={activeAlerts}
-            policy={state.policy}
-            person={state.person}
-            contact={state.contact}
-            claimant={state.claimant}
-          />
+          {!isWelcomeEmpty ? (
+            <ChatContextPanel
+              collapsed={state.contextCollapsed}
+              onToggleCollapsed={() => dispatch({ type: 'SET_CONTEXT_COLLAPSED', value: !state.contextCollapsed })}
+              flow={state.flow}
+              stage={state.stage}
+              progressIndex={progressIndex}
+              documents={state.documents}
+              alerts={activeAlerts}
+              policy={state.policy}
+              person={state.person}
+              contact={state.contact}
+              claimant={state.claimant}
+            />
+          ) : null}
         </div>
       </section>
 
