@@ -23,6 +23,7 @@ export default function WizardStepReview({
   person,
   contact,
   claimant,
+  selectedTramite,
   documents,
   alerts,
   reviewConfirmed,
@@ -80,12 +81,24 @@ export default function WizardStepReview({
             <span className="font-bold">Tipo:</span> {claimant.type}
             <br />
             <span className="font-bold">Siniestro:</span> {claimant.sinisterNumber || 'No capturado'}
-            <br />
-            <span className="font-bold">Moneda:</span> {claimant.currency}
-            <br />
-            <span className="font-bold">Monto:</span> {claimant.claimedAmount}
-            <br />
-            <span className="font-bold">Recibos:</span> {claimant.receiptsCount}
+            {selectedTramite === 'cirugia_programada' ? (
+              <>
+                <br />
+                <span className="font-bold">Lugar de atención:</span> {claimant.attentionPlace || 'No capturado'}
+                <br />
+                <span className="font-bold">Tipo de trámite:</span> {claimant.tramiteType || 'No capturado'}
+              </>
+            ) : null}
+            {selectedTramite !== 'cirugia_programada' ? (
+              <>
+                <br />
+                <span className="font-bold">Moneda:</span> {claimant.currency}
+                <br />
+                <span className="font-bold">Monto:</span> {claimant.claimedAmount}
+                <br />
+                <span className="font-bold">Recibos:</span> {claimant.receiptsCount}
+              </>
+            ) : null}
           </p>
         </ReviewCard>
       </div>

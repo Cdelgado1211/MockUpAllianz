@@ -19,17 +19,17 @@ export const tramiteOptions = [
     id: 'cirugia_programada',
     label: 'Cirugía Programada',
     description: 'Tramita tu carta de autorización para procedimientos quirúrgicos con anticipación.',
-    actionLabel: 'Más información',
-    badge: 'Próximamente',
-    available: false
+    actionLabel: 'Iniciar solicitud',
+    badge: '',
+    available: true
   },
   {
     id: 'chatbot',
-    label: 'Chatbot (Asistencia)',
-    description: 'Resuelve tus dudas al instante con nuestro asistente virtual disponible 24/7.',
-    actionLabel: 'Hablar ahora',
-    badge: 'Próximamente',
-    available: false
+    label: 'Chatbot Web',
+    description: 'Resuelve tus dudas e inicia un trámite con un asistente conversacional guiado.',
+    actionLabel: 'Abrir chat',
+    badge: '',
+    available: true
   },
   {
     id: 'estatus',
@@ -166,6 +166,9 @@ export const demoExtraction = {
     type: 'Complemento',
     knowsSinisterNumber: 'No',
     sinisterNumber: '',
+    attentionPlace: '',
+    tramiteType: '',
+    observations: '',
     currency: 'Pesos',
     claimedAmount: '38420.00',
     receiptsCount: '4',

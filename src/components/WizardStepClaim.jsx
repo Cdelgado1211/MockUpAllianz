@@ -69,7 +69,35 @@ function TextInput({
   );
 }
 
-function ChoiceGroup({ label, value, options, onChange, helperText, selectedTone = 'sky' }) {
+function SelectField({
+  label,
+  value,
+  onChange,
+  options,
+  error,
+  helperText,
+  autoIdentified = false
+}) {
+  return (
+    <FieldFrame label={label} autoIdentified={autoIdentified} error={error} helperText={helperText}>
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className={`h-12 w-full rounded-xl border px-4 text-sm font-medium text-[#181C1E] outline-none transition focus:ring-2 focus:ring-[#006494] focus:ring-offset-2 focus:ring-offset-white ${
+          error ? 'border-[#F3B6AA] bg-[#FFF7F6]' : 'border-[#E0E6ED] bg-white'
+        }`}
+      >
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </FieldFrame>
+  );
+}
+
+function ChoiceGroup({ label, value, options, onChange, helperText, error, selectedTone = 'sky' }) {
   return (
     <div className="block">
       <div className="mb-1.5 flex items-start justify-between gap-3">
@@ -97,7 +125,11 @@ function ChoiceGroup({ label, value, options, onChange, helperText, selectedTone
           );
         })}
       </div>
-      {helperText ? <p className="mt-1.5 text-xs leading-5 text-[#6B7280]">{helperText}</p> : null}
+      {error ? (
+        <p className="mt-1.5 text-xs font-semibold text-[#D93025]">{error}</p>
+      ) : helperText ? (
+        <p className="mt-1.5 text-xs leading-5 text-[#6B7280]">{helperText}</p>
+      ) : null}
     </div>
   );
 }
@@ -109,10 +141,11 @@ export default function WizardStepClaim({
   onSaveDraft,
   onPrimary,
   primaryDisabled = false,
-  claimError = ''
+  claimErrors = {},
+  selectedTramite
 }) {
   const needsSinister = claimant.type === 'Complemento';
-  const allowSinister = !needsSinister || claimant.knowsSinisterNumber === 'Sí';
+  const isSurgery = selectedTramite === 'cirugia_programada';
 
   return (
     <section className="space-y-4">
@@ -127,7 +160,7 @@ export default function WizardStepClaim({
       <SectionCard
         eyebrow="Tipo de reclamación"
         title="Datos de la reclamación"
-        description="Selecciona el tipo de reclamo y, si es complemento, confirma si conoces el número de siniestro."
+        description="Selecciona el tipo de reclamo y, si es complemento o cirugía programada, confirma los datos que correspondan."
       >
         <div className="grid gap-4 lg:grid-cols-2">
           <ChoiceGroup
@@ -139,61 +172,108 @@ export default function WizardStepClaim({
           />
 
           {needsSinister ? (
-            <ChoiceGroup
-              label="¿Conoces el número de tu siniestro?"
-              value={claimant.knowsSinisterNumber}
-              options={['Sí', 'No']}
-              onChange={(value) => onClaimantChange('knowsSinisterNumber', value)}
-              selectedTone="dark"
-            />
-          ) : (
-            <div className="rounded-[20px] border border-dashed border-[#E0E6ED] bg-[#F7FAFC] p-4 text-sm leading-6 text-[#6B7280]">
-              Cuando el trámite sea complemento, podrás indicar si conoces el número de siniestro.
+            <div className="space-y-4">
+              <ChoiceGroup
+                label="¿Conoces el número de tu siniestro?"
+                value={claimant.knowsSinisterNumber}
+                options={['Sí', 'No']}
+                onChange={(value) => onClaimantChange('knowsSinisterNumber', value)}
+                selectedTone="dark"
+              />
+
+              {claimant.knowsSinisterNumber === 'Sí' ? (
+                <TextInput
+                  label="Número de siniestro"
+                  value={claimant.sinisterNumber}
+                  onChange={(value) => onClaimantChange('sinisterNumber', value)}
+                  autoIdentified={claimant.identifiedAutomatically}
+                  placeholder="Captura el número"
+                  helperText="Ingresa el número si lo conoces."
+                  error={claimErrors.sinisterNumber}
+                />
+              ) : null}
             </div>
-          )}
+          ) : null}
+
+          {isSurgery ? (
+            <div className="lg:col-span-2">
+              <ChoiceGroup
+                label="Lugar de atención"
+                value={claimant.attentionPlace}
+                options={['Trámite Nacional', 'Trámite Internacional']}
+                onChange={(value) => onClaimantChange('attentionPlace', value)}
+                selectedTone="dark"
+                error={claimErrors.attentionPlace}
+              />
+            </div>
+          ) : null}
+
+          {isSurgery ? (
+            <div className="lg:col-span-2">
+              <SelectField
+                label="Tipo de trámite"
+                value={claimant.tramiteType}
+                onChange={(value) => onClaimantChange('tramiteType', value)}
+                error={claimErrors.tramiteType}
+                helperText="Selecciona el tipo de trámite para continuar."
+                options={[
+                  { value: '', label: '--Seleccione una opción--' },
+                  { value: 'Cirugía', label: 'Cirugía' },
+                  { value: 'Medicamentos', label: 'Medicamentos' },
+                  { value: 'Estudios', label: 'Estudios' },
+                  { value: 'Rehabilitación', label: 'Rehabilitación' },
+                  { value: 'Enfermería y Home Care', label: 'Enfermería y Home Care' },
+                  { value: 'Otros', label: 'Otros' }
+                ]}
+              />
+            </div>
+          ) : null}
+
+          {isSurgery && claimant.tramiteType === 'Otros' ? (
+            <div className="lg:col-span-2">
+              <TextInput
+                label="Observaciones"
+                value={claimant.observations || ''}
+                onChange={(value) => onClaimantChange('observations', value)}
+                helperText="Este campo es obligatorio para continuar con tipo de trámite Otros."
+                error={claimErrors.observations}
+              />
+            </div>
+          ) : null}
         </div>
       </SectionCard>
 
-      <SectionCard
-        eyebrow="Campos de reclamación"
-        title="Información de la reclamación"
-        description="Los datos precargados siguen siendo editables y se usan para preparar la siguiente etapa del flujo."
-      >
-        <div className="grid gap-4 md:grid-cols-2">
-          <TextInput
-            label="Número de siniestro"
-            value={claimant.sinisterNumber}
-            onChange={(value) => onClaimantChange('sinisterNumber', value)}
-            autoIdentified={claimant.identifiedAutomatically}
-            placeholder={needsSinister && claimant.knowsSinisterNumber === 'Sí' ? 'Captura el número' : 'Opcional si no lo conoces'}
-            helperText={needsSinister && claimant.knowsSinisterNumber === 'No' ? 'Puede permanecer vacío si no se conoce.' : 'Puede permanecer vacío si no se conoce.'}
-            error={claimError}
-            disabled={needsSinister && claimant.knowsSinisterNumber === 'No'}
-          />
+      {!isSurgery ? (
+        <SectionCard
+          eyebrow="Campos de reclamación"
+          title="Información de la reclamación"
+          description="Los datos precargados siguen siendo editables y se usan para preparar la siguiente etapa del flujo."
+        >
+          <div className="grid gap-4 md:grid-cols-2">
+            <TextInput
+              label="Moneda"
+              value={claimant.currency}
+              onChange={(value) => onClaimantChange('currency', value)}
+              autoIdentified={claimant.identifiedAutomatically}
+              helperText="Selecciona la moneda de los recibos."
+            />
 
-          <TextInput
-            label="Moneda"
-            value={claimant.currency}
-            onChange={(value) => onClaimantChange('currency', value)}
-            autoIdentified={claimant.identifiedAutomatically}
-            helperText="Selecciona la moneda de los recibos."
-          />
+            <TextInput
+              label="Monto reclamado"
+              value={claimant.claimedAmount}
+              onChange={(value) => onClaimantChange('claimedAmount', value)}
+              helperText="Puedes ajustar el monto si el valor detectado no es correcto."
+            />
 
-          <TextInput
-            label="Monto reclamado"
-            value={claimant.claimedAmount}
-            onChange={(value) => onClaimantChange('claimedAmount', value)}
-            helperText="Puedes ajustar el monto si el valor detectado no es correcto."
-          />
-
-          <TextInput
-            label="Cantidad de recibos o facturas"
-            value={claimant.receiptsCount}
-            onChange={(value) => onClaimantChange('receiptsCount', value)}
-            helperText="Número total de comprobantes a reembolsar."
-          />
-        </div>
-      </SectionCard>
+            <TextInput
+              label="Cantidad de recibos o facturas"
+              value={claimant.receiptsCount}
+              onChange={(value) => onClaimantChange('receiptsCount', value)}
+              helperText="Número total de comprobantes a reembolsar."
+            />
+          </div>
+        </SectionCard>
+      ) : null}
 
       <section className="rounded-[20px] border border-[#CFE8D5] bg-[#F6FBF7] p-5 shadow-sm sm:p-6">
         <div className="flex items-start gap-4">

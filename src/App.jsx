@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import ConfirmationModal from './components/ConfirmationModal';
+import ChatbotWorkspace from './components/ChatbotWorkspace';
 import FilePreviewModal from './components/FilePreviewModal';
 import InfoIntroModal from './components/InfoIntroModal';
 import InfoModal from './components/InfoModal';
@@ -160,15 +161,52 @@ function getContactErrors(contact) {
   };
 }
 
-function getClaimErrors(claimant) {
-  if (claimant.type !== 'Complemento') return '';
-  if (claimant.knowsSinisterNumber === 'Sí' && !String(claimant.sinisterNumber ?? '').trim()) {
-    return 'El número de siniestro es obligatorio cuando conoces el dato.';
+function getClaimErrors(claimant, selectedTramite) {
+  const errors = {
+    sinisterNumber: '',
+    attentionPlace: '',
+    tramiteType: '',
+    observations: ''
+  };
+
+  if (claimant.type === 'Complemento' && claimant.knowsSinisterNumber === 'Sí' && !String(claimant.sinisterNumber ?? '').trim()) {
+    errors.sinisterNumber = 'El número de siniestro es obligatorio cuando conoces el dato.';
   }
+
+  if (selectedTramite === 'cirugia_programada' && !String(claimant.attentionPlace ?? '').trim()) {
+    errors.attentionPlace = 'Selecciona el lugar de atención para continuar.';
+  }
+
+  if (selectedTramite === 'cirugia_programada' && !String(claimant.tramiteType ?? '').trim()) {
+    errors.tramiteType = 'Selecciona el tipo de trámite para continuar.';
+  }
+
+  if (selectedTramite === 'cirugia_programada' && claimant.tramiteType === 'Otros' && !String(claimant.observations ?? '').trim()) {
+    errors.observations = 'Las observaciones son obligatorias cuando el tipo de trámite es Otros.';
+  }
+
+  return errors;
+}
+
+function getReviewBlockedReason(state, selectedTramite) {
+  const contactErrors = getContactErrors(state.contact);
+  if (contactErrors.mobilePhone || contactErrors.email || contactErrors.emailConfirmation || contactErrors.phoneLandline) return 'contact';
+  if (state.person.relationship === 'Otro') {
+    if (
+      !String(state.person.parentesco ?? '').trim() ||
+      !state.person.firstName.trim() ||
+      !state.person.paternalLastName.trim() ||
+      !state.person.maternalLastName.trim()
+      ) {
+      return 'person';
+    }
+  }
+  const claimErrors = getClaimErrors(state.claimant, selectedTramite);
+  if (claimErrors.sinisterNumber || claimErrors.attentionPlace || claimErrors.tramiteType || claimErrors.observations) return 'claim';
   return '';
 }
 
-function getReviewBlockedReason(state) {
+function getInformationBlockedReason(state) {
   const contactErrors = getContactErrors(state.contact);
   if (contactErrors.mobilePhone || contactErrors.email || contactErrors.emailConfirmation || contactErrors.phoneLandline) return 'contact';
   if (state.person.relationship === 'Otro') {
@@ -181,8 +219,6 @@ function getReviewBlockedReason(state) {
       return 'person';
     }
   }
-  const claimError = getClaimErrors(state.claimant);
-  if (claimError) return 'claim';
   return '';
 }
 
@@ -221,6 +257,11 @@ function WizardApp() {
   const validationTimersRef = useRef([]);
   const toastTimerRef = useRef(null);
   const selectionNextButtonRef = useRef(null);
+  const selectedTramiteRequiresIntro = selectedTramite === 'reembolso' || selectedTramite === 'cirugia_programada';
+  const selectedTramiteCanProceed =
+    selectedTramite === 'chatbot' || (selectedTramiteRequiresIntro && hasViewedReimbursementPopup && !showTramiteInfoModal && !showTramiteDocumentsModal);
+  const selectedTramiteLabel =
+    selectedTramite === 'cirugia_programada' ? 'Cirugía Programada' : selectedTramite === 'chatbot' ? 'Chatbot Web' : 'Reembolso';
 
   useEffect(() => {
     return () => {
@@ -276,8 +317,9 @@ function WizardApp() {
   }, [state.phase, state.currentStep]);
 
   const contactErrors = useMemo(() => getContactErrors(state.contact), [state.contact]);
-  const claimError = useMemo(() => getClaimErrors(state.claimant), [state.claimant]);
-  const reviewBlockedReason = useMemo(() => getReviewBlockedReason(state), [state.contact, state.person, state.claimant]);
+  const claimErrors = useMemo(() => getClaimErrors(state.claimant, selectedTramite), [state.claimant, selectedTramite]);
+  const informationBlockedReason = useMemo(() => getInformationBlockedReason(state), [state.contact, state.person]);
+  const reviewBlockedReason = useMemo(() => getReviewBlockedReason(state, selectedTramite), [state.contact, state.person, state.claimant, selectedTramite]);
 
   const loadedDocuments = useMemo(() => getLoadedDocuments(state.documents), [state.documents]);
   const processedCount = loadedDocuments.length;
@@ -329,19 +371,22 @@ function WizardApp() {
 
   const handleTramiteSelect = (tramiteId) => {
     setSelectedTramite(tramiteId);
-    if (tramiteId === 'reembolso') {
+    setHasViewedReimbursementPopup(false);
+    setShowTramiteInfoModal(false);
+    setShowTramiteDocumentsModal(false);
+    if (tramiteId === 'reembolso' || tramiteId === 'cirugia_programada') {
       setShowTramiteInfoModal(true);
     }
   };
 
   const handleSelectionInfoClose = () => {
     setShowTramiteInfoModal(false);
-    if (selectedTramite === 'reembolso') setShowTramiteDocumentsModal(true);
+    if (selectedTramiteRequiresIntro) setShowTramiteDocumentsModal(true);
   };
 
   const handleSelectionDocumentsClose = () => {
     setShowTramiteDocumentsModal(false);
-    if (selectedTramite === 'reembolso') {
+    if (selectedTramiteRequiresIntro) {
       setHasViewedReimbursementPopup(true);
       window.requestAnimationFrame(() => {
         selectionNextButtonRef.current?.focus();
@@ -350,7 +395,12 @@ function WizardApp() {
   };
 
   const handleSelectionNext = () => {
-    if (selectedTramite !== 'reembolso' || showTramiteInfoModal || showTramiteDocumentsModal || !hasViewedReimbursementPopup) {
+    if (!selectedTramiteCanProceed) {
+      return;
+    }
+
+    if (selectedTramite === 'chatbot') {
+      dispatch({ type: 'SET_PHASE', value: 'chatbot' });
       return;
     }
 
@@ -409,13 +459,50 @@ function WizardApp() {
   };
 
   const handleInformationContinue = () => {
-    if (reviewBlockedReason) return;
+    if (informationBlockedReason) return;
     dispatch({ type: 'SET_STEP', value: 3 });
   };
 
   const handleClaimContinue = () => {
-    if (claimError) return;
+    if (claimErrors.sinisterNumber || claimErrors.attentionPlace || claimErrors.tramiteType || claimErrors.observations) return;
     dispatch({ type: 'SET_STEP', value: 4 });
+  };
+
+  const handleClaimantFieldChange = (field, value) => {
+    if (field === 'type') {
+      dispatch({ type: 'SET_CLAIMANT_FIELD', field, value });
+      if (value !== 'Complemento') {
+        dispatch({ type: 'SET_CLAIMANT_FIELD', field: 'knowsSinisterNumber', value: 'No' });
+        dispatch({ type: 'SET_CLAIMANT_FIELD', field: 'sinisterNumber', value: '' });
+      }
+      dispatch({ type: 'SET_REVIEW_CONFIRMED', value: false });
+      return;
+    }
+
+    if (field === 'knowsSinisterNumber') {
+      dispatch({ type: 'SET_CLAIMANT_FIELD', field, value });
+      if (value !== 'Sí') {
+        dispatch({ type: 'SET_CLAIMANT_FIELD', field: 'sinisterNumber', value: '' });
+      }
+      dispatch({ type: 'SET_REVIEW_CONFIRMED', value: false });
+      return;
+    }
+
+    if (field === 'tramiteType') {
+      dispatch({ type: 'SET_CLAIMANT_FIELD', field, value });
+      if (selectedTramite === 'cirugia_programada') {
+        dispatch({
+          type: 'SET_CLAIMANT_FIELD',
+          field: 'observations',
+          value: value === 'Otros' ? 'Observaciones para trámite Otros' : ''
+        });
+      }
+      dispatch({ type: 'SET_REVIEW_CONFIRMED', value: false });
+      return;
+    }
+
+    dispatch({ type: 'SET_CLAIMANT_FIELD', field, value });
+    dispatch({ type: 'SET_REVIEW_CONFIRMED', value: false });
   };
 
   const handleConfirmSend = () => {
@@ -423,6 +510,15 @@ function WizardApp() {
       dispatch({ type: 'SET_PHASE', value: 'transition' });
       dispatch({ type: 'SET_FINAL_CONFIRMED', value: true });
     }
+  };
+
+  const handleExitChatbot = () => {
+    setSelectedTramite(null);
+    setHasViewedReimbursementPopup(false);
+    setShowTramiteInfoModal(false);
+    setShowTramiteDocumentsModal(false);
+    dispatch({ type: 'SET_PHASE', value: 'entry' });
+    dispatch({ type: 'SET_STEP', value: 0 });
   };
 
   const handleDocumentUpload = (documentId, files) => {
@@ -518,6 +614,7 @@ function WizardApp() {
       return (
         <WizardStepDocuments
           documents={state.documents}
+          selectedTramite={selectedTramite}
           observations={state.observations}
           onObservationsChange={(value) => {
             dispatch({ type: 'SET_OBSERVATIONS', value });
@@ -575,13 +672,12 @@ function WizardApp() {
             dispatch({ type: 'SET_REVIEW_CONFIRMED', value: false });
           }}
           onClaimantChange={(field, value) => {
-            dispatch({ type: 'SET_CLAIMANT_FIELD', field, value });
-            dispatch({ type: 'SET_REVIEW_CONFIRMED', value: false });
+            handleClaimantFieldChange(field, value);
           }}
           onBack={() => dispatch({ type: 'SET_STEP', value: 1 })}
           onSaveDraft={handleSaveDraft}
           onPrimary={handleInformationContinue}
-          primaryDisabled={Boolean(reviewBlockedReason)}
+          primaryDisabled={Boolean(informationBlockedReason)}
         />
       );
     }
@@ -591,26 +687,27 @@ function WizardApp() {
         <WizardStepClaim
           claimant={state.claimant}
           onClaimantChange={(field, value) => {
-            dispatch({ type: 'SET_CLAIMANT_FIELD', field, value });
-            dispatch({ type: 'SET_REVIEW_CONFIRMED', value: false });
+            handleClaimantFieldChange(field, value);
           }}
           onBack={() => dispatch({ type: 'SET_STEP', value: 2 })}
           onSaveDraft={handleSaveDraft}
           onPrimary={handleClaimContinue}
-          primaryDisabled={Boolean(claimError)}
-          claimError={claimError}
+          primaryDisabled={Boolean(claimErrors.sinisterNumber || claimErrors.attentionPlace || claimErrors.tramiteType || claimErrors.observations)}
+          claimErrors={claimErrors}
+          selectedTramite={selectedTramite}
         />
       );
     }
 
     return (
-      <WizardStepReview
-        policy={state.policy}
-        person={state.person}
-        contact={state.contact}
-        claimant={state.claimant}
-        documents={state.documents}
-        alerts={state.alerts}
+        <WizardStepReview
+          policy={state.policy}
+          person={state.person}
+          contact={state.contact}
+          claimant={state.claimant}
+          selectedTramite={selectedTramite}
+          documents={state.documents}
+          alerts={state.alerts}
         reviewConfirmed={state.reviewConfirmed}
         onReviewConfirmedChange={(value) => dispatch({ type: 'SET_REVIEW_CONFIRMED', value })}
         recaptchaVisual
@@ -630,6 +727,10 @@ function WizardApp() {
     return <TransitionScreen />;
   }
 
+  if (state.phase === 'chatbot') {
+    return <ChatbotWorkspace onExit={handleExitChatbot} />;
+  }
+
   if (state.phase === 'entry') {
     return (
       <div className="min-h-screen bg-[#F7FAFC]">
@@ -637,11 +738,11 @@ function WizardApp() {
           selected={selectedTramite}
           onSelect={handleTramiteSelect}
           onNext={handleSelectionNext}
-          nextDisabled={selectedTramite !== 'reembolso' || !hasViewedReimbursementPopup || showTramiteInfoModal || showTramiteDocumentsModal}
+          nextDisabled={!selectedTramiteCanProceed}
           nextButtonRef={selectionNextButtonRef}
         />
-        <InfoIntroModal open={showTramiteInfoModal} onContinue={handleSelectionInfoClose} />
-        <InfoModal open={showTramiteDocumentsModal} onClose={handleSelectionDocumentsClose} />
+        <InfoIntroModal open={showTramiteInfoModal} onContinue={handleSelectionInfoClose} tramiteLabel={selectedTramiteLabel} />
+        <InfoModal open={showTramiteDocumentsModal} onClose={handleSelectionDocumentsClose} tramiteLabel={selectedTramiteLabel} />
       </div>
     );
   }
@@ -669,8 +770,8 @@ function WizardApp() {
         {state.phase === 'wizard' && <section className="mx-auto mt-4 flex-1 w-full max-w-[980px]">{renderWizardStep()}</section>}
       </main>
 
-      <InfoIntroModal open={showTramiteInfoModal} onContinue={handleSelectionInfoClose} />
-      <InfoModal open={showTramiteDocumentsModal} onClose={handleSelectionDocumentsClose} />
+      <InfoIntroModal open={showTramiteInfoModal} onContinue={handleSelectionInfoClose} tramiteLabel={selectedTramiteLabel} />
+      <InfoModal open={showTramiteDocumentsModal} onClose={handleSelectionDocumentsClose} tramiteLabel={selectedTramiteLabel} />
 
       <ConfirmationModal
         open={showDocsWarningModal}
@@ -706,7 +807,6 @@ function WizardApp() {
           </div>
         </div>
       )}
-
     </div>
   );
 }

@@ -3,6 +3,7 @@ import WizardFooter from './WizardFooter';
 
 export default function WizardStepDocuments({
   documents,
+  selectedTramite,
   observations,
   onObservationsChange,
   onFilesSelected,
@@ -12,14 +13,17 @@ export default function WizardStepDocuments({
   onPrimary,
   highlightedDocumentId
 }) {
-  const hasDocuments = documents.some((document) => document.files.length > 0);
+  const excludedDocumentIds =
+    selectedTramite === 'cirugia_programada' ? new Set(['solicitud', 'identificacion', 'historia']) : new Set();
+  const visibleDocuments = documents.filter((document) => !excludedDocumentIds.has(document.id));
+  const hasDocuments = visibleDocuments.some((document) => document.files.length > 0);
   const canContinueWithoutDocuments = Boolean(observations.trim());
   const primaryDisabled = !hasDocuments && !canContinueWithoutDocuments;
 
   return (
     <section className="space-y-4">
       <div className="space-y-5">
-        {documents.map((document) => (
+        {visibleDocuments.map((document) => (
           <DocumentCard
             key={document.id}
             document={document}
