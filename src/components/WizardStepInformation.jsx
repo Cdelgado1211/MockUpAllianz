@@ -64,7 +64,7 @@ function TextInput({
     <FieldFrame label={label} autoIdentified={autoIdentified} error={error} helperText={helperText}>
       <input
         type={type}
-        value={value}
+        value={value ?? ''}
         onChange={(event) => onChange(event.target.value)}
         readOnly={readOnly}
         placeholder={placeholder}
@@ -84,7 +84,7 @@ function SelectField({ label, value, onChange, options, helperText, autoIdentifi
   return (
     <FieldFrame label={label} autoIdentified={autoIdentified} helperText={helperText}>
       <select
-        value={value}
+        value={value ?? ''}
         onChange={(event) => onChange(event.target.value)}
         className="h-12 w-full rounded-xl border border-[#E0E6ED] bg-white px-4 text-sm font-medium text-[#181C1E] outline-none transition focus:ring-2 focus:ring-[#006494] focus:ring-offset-2 focus:ring-offset-white"
       >
@@ -145,21 +145,21 @@ function ManualNameFields({ person, personErrors, onPersonChange }) {
       />
       <TextInput
         label="Nombre"
-        value={person.firstName}
+        value={person.firstName ?? ''}
         onChange={(value) => onPersonChange('firstName', value)}
         error={personErrors.firstName}
         placeholder="Ingresa el nombre"
       />
       <TextInput
         label="Apellido paterno"
-        value={person.paternalLastName}
+        value={person.paternalLastName ?? ''}
         onChange={(value) => onPersonChange('paternalLastName', value)}
         error={personErrors.paternalLastName}
         placeholder="Ingresa el apellido paterno"
       />
       <TextInput
         label="Apellido materno"
-        value={person.maternalLastName}
+        value={person.maternalLastName ?? ''}
         onChange={(value) => onPersonChange('maternalLastName', value)}
         error={personErrors.maternalLastName}
         placeholder="Ingresa el apellido materno"
@@ -172,7 +172,7 @@ function ReadOnlyField({ label, value, autoIdentified = false, helperText = '' }
   return (
     <FieldFrame label={label} autoIdentified={autoIdentified} helperText={helperText}>
       <div className="flex h-12 items-center rounded-xl border border-[#E0E6ED] bg-[#F7FAFC] px-4 text-sm font-medium text-[#4B5563]">
-        {value}
+        {value || 'No capturado'}
       </div>
     </FieldFrame>
   );
@@ -199,9 +199,9 @@ export default function WizardStepInformation({
     !usingAutoData && person.relationship === 'Otro'
       ? {
           parentesco: person.parentesco?.trim() ? '' : 'Ingresa el parentesco.',
-          firstName: person.firstName.trim() ? '' : 'Ingresa el nombre.',
-          paternalLastName: person.paternalLastName.trim() ? '' : 'Ingresa el apellido paterno.',
-          maternalLastName: person.maternalLastName.trim() ? '' : 'Ingresa el apellido materno.'
+          firstName: String(person.firstName ?? '').trim() ? '' : 'Ingresa el nombre.',
+          paternalLastName: String(person.paternalLastName ?? '').trim() ? '' : 'Ingresa el apellido paterno.',
+          maternalLastName: String(person.maternalLastName ?? '').trim() ? '' : 'Ingresa el apellido materno.'
         }
       : {};
 

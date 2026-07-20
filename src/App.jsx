@@ -133,6 +133,8 @@ function reducer(state, action) {
       };
     case 'SET_ALERTS':
       return { ...state, alerts: action.value };
+    case 'CLEAR_ALERT_DECISIONS':
+      return { ...state, ignoredAlerts: [], acceptedAlerts: [] };
     case 'MARK_ALERT_IGNORED':
       return {
         ...state,
@@ -208,9 +210,9 @@ function getReviewBlockedReason(state, selectedTramite) {
   if (state.person.relationship === 'Otro') {
     if (
       !String(state.person.parentesco ?? '').trim() ||
-      !state.person.firstName.trim() ||
-      !state.person.paternalLastName.trim() ||
-      !state.person.maternalLastName.trim()
+      !String(state.person.firstName ?? '').trim() ||
+      !String(state.person.paternalLastName ?? '').trim() ||
+      !String(state.person.maternalLastName ?? '').trim()
       ) {
       return 'person';
     }
@@ -226,9 +228,9 @@ function getInformationBlockedReason(state) {
   if (state.person.relationship === 'Otro') {
     if (
       !String(state.person.parentesco ?? '').trim() ||
-      !state.person.firstName.trim() ||
-      !state.person.paternalLastName.trim() ||
-      !state.person.maternalLastName.trim()
+      !String(state.person.firstName ?? '').trim() ||
+      !String(state.person.paternalLastName ?? '').trim() ||
+      !String(state.person.maternalLastName ?? '').trim()
     ) {
       return 'person';
     }
@@ -476,7 +478,11 @@ function WizardApp() {
   const handleDocsWarningProceed = () => {
     setShowDocsWarningModal(false);
     if (docsWarningContext === 'no-docs') {
+      dispatch({ type: 'SET_PHASE', value: 'wizard' });
       dispatch({ type: 'RESET_VALIDATION' });
+      dispatch({ type: 'SET_ALERTS', value: [] });
+      dispatch({ type: 'CLEAR_ALERT_DECISIONS' });
+      dispatch({ type: 'SET_REVIEW_CONFIRMED', value: false });
       dispatch({ type: 'SET_STEP', value: 2 });
       return;
     }

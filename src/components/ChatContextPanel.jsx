@@ -1,4 +1,4 @@
-import { ChevronRightIcon, CheckIcon, SparkIcon, TimelineIcon } from './Icon';
+import { ChevronRightIcon, CheckIcon, TimelineIcon, AlertIcon } from './Icon';
 
 const stepLabels = ['Documentos', 'Validación', 'Información', 'Reclamación', 'Revisión'];
 
@@ -67,6 +67,8 @@ export default function ChatContextPanel({
   claimant = null
 }) {
   const completedSteps = progressIndex < 0 ? -1 : progressIndex - 1;
+  const currentStep = progressIndex < 0 ? 0 : Math.min(progressIndex + 1, stepLabels.length);
+  const loadedDocuments = documents.filter((document) => document.files?.length).length;
 
   return (
     <aside
@@ -74,40 +76,62 @@ export default function ChatContextPanel({
         collapsed ? 'w-[96px]' : 'w-[336px]'
       } flex-col`}
     >
-      <div className="border-b border-[#E0E6ED] px-4 py-4">
-        <div className={`flex items-center justify-between gap-3 ${collapsed ? 'justify-center' : ''}`}>
-          {!collapsed ? (
-            <div>
-              <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-[#006494]">Panel contextual</p>
-              <p className="mt-1 text-sm font-semibold text-[#181C1E]">Estado del trámite</p>
-            </div>
-          ) : (
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#EFF6FF] text-[#003781]">
-              <TimelineIcon className="h-5 w-5" />
-            </div>
-          )}
-
+      {collapsed ? (
+        <div className="border-b border-[#E0E6ED] px-2 py-3">
           <button
             type="button"
-            className="focus-ring inline-flex h-10 w-10 items-center justify-center rounded-full border border-[#DDE5EF] bg-white text-[#003781] transition hover:bg-[#F4F8FF]"
+            className="focus-ring group relative mx-auto flex w-[72px] flex-col items-center rounded-2xl border border-[#DDE5EF] bg-white px-2 py-3 text-[#003781] shadow-sm transition hover:border-[#9BB9DF] hover:bg-[#F4F8FF]"
             onClick={onToggleCollapsed}
-            aria-label={collapsed ? 'Expandir panel contextual' : 'Contraer panel contextual'}
+            aria-label="Abrir avance y resumen del trámite"
+            aria-expanded="false"
+            title="Ver avance y resumen del trámite"
           >
-            <ChevronRightIcon className={`h-4 w-4 transition ${collapsed ? 'rotate-180' : ''}`} />
+            <TimelineIcon className="h-5 w-5" />
+            <span className="mt-1.5 text-[11px] font-bold">Avance</span>
+            <span className="mt-0.5 text-[10px] font-semibold text-[#6B7280]">
+              {currentStep > 0 ? `${currentStep} de ${stepLabels.length}` : 'Sin iniciar'}
+            </span>
+            <span className="absolute right-1.5 top-1.5 text-[#6B7280] transition group-hover:-translate-x-0.5 group-hover:text-[#003781]" aria-hidden="true">
+              <ChevronRightIcon className="h-3.5 w-3.5 rotate-180" />
+            </span>
           </button>
         </div>
-      </div>
+      ) : (
+        <div className="border-b border-[#E0E6ED] px-4 py-4">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#EFF6FF] text-[#003781]">
+                <TimelineIcon className="h-5 w-5" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#006494]">Avance del trámite</p>
+                <p className="mt-0.5 truncate text-sm font-semibold text-[#181C1E]">Progreso y resumen</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              className="focus-ring inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[#DDE5EF] bg-white text-[#003781] transition hover:bg-[#F4F8FF]"
+              onClick={onToggleCollapsed}
+              aria-label="Contraer avance y resumen del trámite"
+              aria-expanded="true"
+              title="Contraer panel"
+            >
+              <ChevronRightIcon className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {collapsed ? (
-        <div className="flex flex-1 items-start justify-center px-3 py-4">
-          <button
-            type="button"
-            className="focus-ring inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-[#DDE5EF] bg-white text-[#003781] transition hover:bg-[#F4F8FF]"
-            onClick={onToggleCollapsed}
-            aria-label="Expandir panel contextual"
-          >
-            <SparkIcon className="h-5 w-5" />
-          </button>
+        <div className="flex flex-1 flex-col items-center gap-3 px-2 py-4" aria-label="Resumen compacto del trámite">
+          <div className="w-[72px] rounded-2xl border border-[#E0E6ED] bg-white px-2 py-3 text-center">
+            <p className="text-lg font-bold leading-none text-[#003781]">{loadedDocuments}</p>
+            <p className="mt-1 text-[10px] font-semibold leading-4 text-[#6B7280]">Documentos</p>
+          </div>
+          <div className="w-[72px] rounded-2xl border border-[#E0E6ED] bg-white px-2 py-3 text-center">
+            <p className={`text-lg font-bold leading-none ${alerts.length > 0 ? 'text-[#B45309]' : 'text-[#137333]'}`}>{alerts.length}</p>
+            <p className="mt-1 text-[10px] font-semibold leading-4 text-[#6B7280]">Alertas</p>
+          </div>
         </div>
       ) : (
         <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4">
@@ -143,10 +167,30 @@ export default function ChatContextPanel({
             <div className="mt-3 space-y-3">
               <SummaryRow label="Trámite" value={flow === 'cirugia_programada' ? 'Cirugía Programada' : flow === 'reembolso' ? 'Reembolso' : 'Sin definir'} />
               <SummaryRow label="Etapa" value={stageLabels[stage] ?? 'Sin definir'} />
-              <SummaryRow label="Documentos" value={`${documents.filter((doc) => doc.files?.length).length} cargados`} />
+              <SummaryRow label="Documentos" value={`${loadedDocuments} cargados`} />
               <SummaryRow label="Alertas" value={`${alerts.length} activas`} />
             </div>
           </section>
+
+          {alerts.length > 0 ? (
+            <section className="rounded-[20px] border border-[#F4D58A] bg-white p-4 shadow-sm" aria-live="polite">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-[#006494]">Alertas detectadas</p>
+                <span className="rounded-full bg-[#FFF4D6] px-2 py-1 text-[11px] font-bold text-[#8A4B08]">{alerts.length}</span>
+              </div>
+              <div className="mt-3 space-y-2">
+                {alerts.map((alert) => (
+                  <div key={alert.id} className="flex items-start gap-2 rounded-xl border border-[#E0E6ED] bg-[#F7FAFC] px-3 py-2">
+                    <AlertIcon className={`mt-0.5 h-4 w-4 shrink-0 ${alert.severity === 'critical' ? 'text-[#D93025]' : 'text-[#A15C00]'}`} />
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold leading-4 text-[#181C1E]">{alert.title}</p>
+                      {alert.reason ? <p className="mt-1 text-[11px] leading-4 text-[#6B7280]">{alert.reason}</p> : null}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          ) : null}
 
           <section className="rounded-[20px] border border-[#E0E6ED] bg-white p-4 shadow-sm">
             <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-[#006494]">Datos capturados</p>

@@ -229,3 +229,17 @@ export function QuestionIcon({ className = 'h-5 w-5' }) {
     </svg>
   );
 }
+
+export function UserIcon({ className = 'h-5 w-5' }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
+      <circle cx="12" cy="8" r="3.5" stroke="currentColor" strokeWidth="1.8" />
+      <path
+        d="M5.5 19.5c.45-3.5 2.9-5.5 6.5-5.5s6.05 2 6.5 5.5"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}

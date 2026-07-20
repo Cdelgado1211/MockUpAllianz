@@ -64,7 +64,7 @@ export const chatbotFlowGuides = {
   reembolso: {
     title: 'Reembolso',
     summary:
-      'Podrás solicitar la devolución de gastos médicos con documentos institucionales, carga documental y validación automática.',
+      'Te acompaño paso a paso para reunir los documentos, revisar la información y continuar con tu solicitud.',
     requirements: [
       'Aviso de Accidente o Enfermedad.',
       'Solicitud de Reembolso.',
@@ -76,13 +76,13 @@ export const chatbotFlowGuides = {
       'Comprobantes de gastos o facturas.'
     ],
     recommendation:
-      'Si ya tienes tus formatos, puedes continuar y cargarlos en el mismo chat cuando el asistente te lo indique.',
+      'Si ya tienes tus formatos, podemos empezar cuando tú quieras y yo te iré diciendo qué sigue.',
     contactPhone: '55 5201 3116'
   },
   cirugia_programada: {
     title: 'Cirugía Programada',
     summary:
-      'La programación requiere proveedores de red de Allianz, documentos clínicos actualizados y datos de la atención.',
+      'Te iré guiando con lo necesario para programar la atención y dejar todo listo sin complicaciones.',
     requirements: [
       'Aviso de Accidente o Enfermedad.',
       'Informe Médico actualizado.',
@@ -92,7 +92,7 @@ export const chatbotFlowGuides = {
       'Otros documentos de soporte.'
     ],
     recommendation:
-      'Si el tipo de trámite es Otros, el asistente te pedirá observaciones antes de continuar.',
+      'Si el tipo de trámite es Otros, te pediré una observación breve para poder seguir.',
     contactPhone: '55 5201 3181'
   }
 };
@@ -127,6 +127,27 @@ function getFlowDocList(flow) {
   return documentCategories.filter((document) => ids.includes(document.id));
 }
 
+// Escenario de demostración equivalente al formulario del portal: el usuario
+// llega con algunos documentos ya adjuntos y con resultados mixtos de revisión.
+const mixedDocumentFixtures = {
+  reembolso: {
+    aviso: { name: 'aviso-accidente.pdf', size: '1.2 MB', type: 'PDF', status: 'validated', note: 'Documento validado automáticamente.' },
+    solicitud: { name: 'solicitud-reembolso.pdf', size: '842 KB', type: 'PDF', status: 'validated', note: 'Formato validado correctamente.' },
+    informe: { name: 'informe-medico.pdf', size: '1.6 MB', type: 'PDF', status: 'requires_review', note: 'El nombre identificado presenta una diferencia frente al Aviso de Accidente.' },
+    identificacion: { name: 'identificacion-titular.jpg', size: '513 KB', type: 'JPG', status: 'validated', note: 'Identidad confirmada.' },
+    domicilio: { name: 'comprobante-domicilio.pdf', size: '768 KB', type: 'PDF', status: 'illegible', note: 'No fue posible leer con claridad la fecha de emisión del comprobante.' },
+    gastos: { name: 'factura-gastos.xml', size: '212 KB', type: 'XML', status: 'validated', note: 'Factura validada correctamente.' }
+  },
+  cirugia_programada: {
+    aviso: { name: 'aviso-accidente.pdf', size: '1.2 MB', type: 'PDF', status: 'validated', note: 'Documento validado automáticamente.' },
+    informe: { name: 'informe-medico.pdf', size: '1.4 MB', type: 'PDF', status: 'requires_review', note: 'La firma del médico tratante requiere una revisión adicional.' },
+    domicilio: { name: 'comprobante-domicilio.pdf', size: '718 KB', type: 'PDF', status: 'validated', note: 'Documento validado automáticamente.' },
+    gastos: { name: 'presupuesto-honorarios.pdf', size: '486 KB', type: 'PDF', status: 'validated', note: 'Documento validado automáticamente.' },
+    estudios: { name: 'interpretacion-estudios.pdf', size: '931 KB', type: 'PDF', status: 'illegible', note: 'La interpretación de estudios no se pudo leer con claridad.' },
+    soporte: { name: 'documento-soporte.pdf', size: '324 KB', type: 'PDF', status: 'validated', note: 'Documento validado automáticamente.' }
+  }
+};
+
 export function buildChatbotDocuments(flow, scenario = 'blank') {
   const visibleDocuments = getFlowDocList(flow);
 
@@ -146,6 +167,24 @@ export function buildChatbotDocuments(flow, scenario = 'blank') {
     );
   }
 
+  if (scenario === 'mixed') {
+    const fixtures = mixedDocumentFixtures[flow] ?? {};
+
+    return visibleDocuments.map((document) => {
+      const fixture = fixtures[document.id];
+
+      if (!fixture) {
+        return cloneDoc({ ...document, files: [], status: 'pending', validationNote: 'Pendiente' });
+      }
+
+      return cloneDoc(document, {
+        files: [makeFile(fixture.name, fixture.size, fixture.type)],
+        status: fixture.status,
+        validationNote: fixture.note
+      });
+    });
+  }
+
   return visibleDocuments.map((document) => cloneDoc({ ...document, files: [], status: 'pending', validationNote: 'Pendiente' }));
 }
 
@@ -156,35 +195,6 @@ export function buildChatbotAlerts(flow, scenario = 'blank') {
 
   if (scenario === 'out') {
     return [];
-  }
-
-  if (flow === 'cirugia_programada' && scenario === 'flow') {
-    return [
-      {
-        id: 'surgery-alert-1',
-        title: 'Falta capturar el lugar de atención',
-        field: 'Lugar de atención',
-        sourceDocument: 'Datos de reclamación',
-        comparedDocument: 'Flujo de cirugía programada',
-        reason: 'Aún no se selecciona la sede o el alcance de la atención.',
-        recommendation: 'Selecciona si se trata de Trámite Nacional o Trámite Internacional.',
-        severity: 'warning',
-        defaultAction: 'Corregir dato',
-        status: 'active'
-      },
-      {
-        id: 'surgery-alert-2',
-        title: 'El tipo de trámite es obligatorio',
-        field: 'Tipo de trámite',
-        sourceDocument: 'Datos de reclamación',
-        comparedDocument: 'Flujo de cirugía programada',
-        reason: 'El sistema necesita saber si se trata de cirugía, medicamentos, estudios u otros.',
-        recommendation: 'Selecciona una opción para continuar con la captura.',
-        severity: 'warning',
-        defaultAction: 'Corregir dato',
-        status: 'active'
-      }
-    ];
   }
 
   return [];
@@ -216,36 +226,36 @@ export function createChatbotPreset(presetId = 'welcome') {
         ? []
         : preset.id === 'reembolso-review'
           ? [
-              { id: 'assistant-hello', role: 'assistant', text: 'Hola, soy el asistente de Siniestros GMM de Allianz México.' },
+              { id: 'assistant-hello', role: 'assistant', text: 'Hola, soy tu asistente de Siniestros GMM de Allianz México.' },
               { id: 'user-reembolso', role: 'user', text: 'Quiero solicitar un reembolso.' },
               {
                 id: 'assistant-reembolso',
                 role: 'assistant',
-                text: 'Perfecto. Ya tengo un caso de demostración para Reembolso con documentos y observaciones simuladas.'
+                text: 'Perfecto, te ayudo con el trámite de Reembolso.'
               }
             ]
           : preset.id === 'reembolso-success'
             ? [
-                { id: 'assistant-hello', role: 'assistant', text: 'Hola, soy el asistente de Siniestros GMM de Allianz México.' },
+                { id: 'assistant-hello', role: 'assistant', text: 'Hola, soy tu asistente de Siniestros GMM de Allianz México.' },
                 { id: 'user-reembolso', role: 'user', text: 'Quiero solicitar un reembolso.' },
-                { id: 'assistant-reembolso', role: 'assistant', text: 'Este caso de demostración ya viene listo para revisión y confirmación.' }
+                { id: 'assistant-reembolso', role: 'assistant', text: 'Perfecto, ya lo tengo listo para revisarlo contigo.' }
               ]
             : preset.id === 'cirugia-programada'
               ? [
-                  { id: 'assistant-hello', role: 'assistant', text: 'Hola, soy el asistente de Siniestros GMM de Allianz México.' },
+                  { id: 'assistant-hello', role: 'assistant', text: 'Hola, soy tu asistente de Siniestros GMM de Allianz México.' },
                   { id: 'user-cirugia', role: 'user', text: 'Necesito una cirugía programada.' },
-                  { id: 'assistant-cirugia', role: 'assistant', text: 'Preparé un recorrido de demostración para Cirugía Programada.' }
+                  { id: 'assistant-cirugia', role: 'assistant', text: 'Perfecto, te acompaño con Cirugía Programada.' }
                 ]
               : preset.id === 'solo-informacion'
                 ? [
-                    { id: 'assistant-hello', role: 'assistant', text: 'Hola, soy el asistente de Siniestros GMM de Allianz México.' },
+                    { id: 'assistant-hello', role: 'assistant', text: 'Hola, soy tu asistente de Siniestros GMM de Allianz México.' },
                     { id: 'user-info', role: 'user', text: 'Solo quiero información.' },
-                    { id: 'assistant-info', role: 'assistant', text: 'Te mostraré los requisitos y los formatos disponibles.' }
+                    { id: 'assistant-info', role: 'assistant', text: 'Perfecto, te comparto solo lo esencial.' }
                   ]
                 : [
-                    { id: 'assistant-hello', role: 'assistant', text: 'Hola, soy el asistente de Siniestros GMM de Allianz México.' },
+                    { id: 'assistant-hello', role: 'assistant', text: 'Hola, soy tu asistente de Siniestros GMM de Allianz México.' },
                     { id: 'user-external', role: 'user', text: 'Necesito ayuda con una consulta externa.' },
-                    { id: 'assistant-external', role: 'assistant', text: 'Esta consulta requiere atención de un especialista.' }
+                    { id: 'assistant-external', role: 'assistant', text: 'Esa consulta requiere apoyo adicional, pero puedo orientarte con los siguientes pasos.' }
                   ],
     policy: {
       ...demoExtraction.policy
@@ -270,6 +280,7 @@ export function createChatbotPreset(presetId = 'welcome') {
     validationPhase: scenario === 'review' ? 'results' : 'idle',
     validationStageIndex: scenario === 'review' ? 4 : 0,
     validationCompleted: scenario === 'review',
+    preloadedDocumentTraceAdded: false,
     reviewConfirmed: false,
     processingCount: baseValidationCounts.processed,
     validationSummary: baseValidationCounts,

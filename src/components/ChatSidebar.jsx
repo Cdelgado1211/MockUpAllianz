@@ -1,24 +1,9 @@
 import {
-  ChevronRightIcon,
   HomeIcon,
-  MedicalServicesIcon,
-  PaymentsIcon,
   QuestionIcon,
   SidebarToggleIcon,
-  SmartToyIcon,
-  SparkIcon,
-  TimelineIcon
+  SparkIcon
 } from './Icon';
-import { chatbotHistoryItems } from '../data/mockChatbot';
-
-const iconMap = {
-  welcome: SparkIcon,
-  'reembolso-review': PaymentsIcon,
-  'reembolso-success': PaymentsIcon,
-  'cirugia-programada': MedicalServicesIcon,
-  'solo-informacion': SparkIcon,
-  'fuera-de-alcance': TimelineIcon
-};
 
 function RailAction({ icon: Icon, label, active = false, collapsed = false, onClick }) {
   return (
@@ -42,27 +27,13 @@ function RailAction({ icon: Icon, label, active = false, collapsed = false, onCl
   );
 }
 
-function ConversationItem({ item, active, collapsed, onClick }) {
-  const Icon = iconMap[item.id] ?? SmartToyIcon;
-
-  return (
-    <RailAction
-      icon={Icon}
-      label={item.title}
-      active={active}
-      collapsed={collapsed}
-      onClick={onClick}
-    />
-  );
-}
-
 export default function ChatSidebar({
   collapsed = false,
   onToggleCollapsed,
   activePresetId = 'welcome',
-  onSelectPreset,
   onNewConversation,
-  onGoHome
+  onGoHome,
+  onHelp
 }) {
   return (
     <aside
@@ -89,7 +60,7 @@ export default function ChatSidebar({
         </div>
       ) : null}
 
-      <div className={`flex-1 overflow-y-auto py-4 ${collapsed ? 'px-2' : 'px-3'}`}>
+      <div className={`flex min-h-0 flex-1 flex-col py-4 ${collapsed ? 'px-2' : 'px-3'}`}>
         <div className="space-y-2">
           {collapsed ? (
             <RailAction
@@ -107,43 +78,11 @@ export default function ChatSidebar({
             collapsed={collapsed}
             onClick={onNewConversation}
           />
-          {!collapsed ? (
-            <div className="pt-3">
-              <p className="px-2 text-[11px] font-bold uppercase tracking-[0.22em] text-[#006494]">Conversaciones</p>
-              <div className="mt-3 space-y-2">
-                {chatbotHistoryItems.map((item) => (
-                  <ConversationItem
-                    key={item.id}
-                    item={item}
-                    active={activePresetId === item.id}
-                    collapsed={collapsed}
-                    onClick={() => onSelectPreset(item.id)}
-                  />
-                ))}
-              </div>
-            </div>
-          ) : (
-            <div className="pt-3">
-              <div className="space-y-2">
-                {chatbotHistoryItems.map((item) => (
-                  <ConversationItem
-                    key={item.id}
-                    item={item}
-                    active={activePresetId === item.id}
-                    collapsed={collapsed}
-                    onClick={() => onSelectPreset(item.id)}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
         </div>
 
-        <div className="my-4 border-t border-[#E0E6ED]" />
-
-        <div className="space-y-2">
+        <div className="mt-auto space-y-2 border-t border-[#E0E6ED] pt-4">
           <RailAction icon={HomeIcon} label="Inicio" active={false} collapsed={collapsed} onClick={onGoHome} />
-          <RailAction icon={QuestionIcon} label="Ayuda" active={false} collapsed={collapsed} onClick={onGoHome} />
+          <RailAction icon={QuestionIcon} label="Ayuda" active={false} collapsed={collapsed} onClick={onHelp} />
         </div>
       </div>
     </aside>

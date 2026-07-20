@@ -1,4 +1,4 @@
-import { CheckIcon, SparkIcon } from './Icon';
+import { SparkIcon, UserIcon } from './Icon';
 
 export default function ChatMessage({ role = 'assistant', text, timeLabel = '', children }) {
   const isUser = role === 'user';
@@ -12,7 +12,7 @@ export default function ChatMessage({ role = 'assistant', text, timeLabel = '', 
           }`}
           aria-hidden="true"
         >
-          {isUser ? <span className="text-[11px] font-bold">AM</span> : <SparkIcon className="h-5 w-5" />}
+          {isUser ? <UserIcon className="h-5 w-5" /> : <SparkIcon className="h-5 w-5" />}
         </div>
 
         <div

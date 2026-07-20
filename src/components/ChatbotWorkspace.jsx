@@ -4,6 +4,8 @@ import ChatContextPanel from './ChatContextPanel';
 import ChatHeader from './ChatHeader';
 import ChatMessage from './ChatMessage';
 import ChatSidebar from './ChatSidebar';
+import ClaimSummaryMessage from './ClaimSummaryMessage';
+import InformationSummaryMessage from './InformationSummaryMessage';
 import ConfirmationModal from './ConfirmationModal';
 import DocumentCard from './DocumentCard';
 import ValidationProcessingScreen from './ValidationProcessingScreen';
@@ -11,7 +13,7 @@ import ValidationResultsPanel from './ValidationResultsPanel';
 import ValidationSummary from './ValidationSummary';
 import ValidationDocumentCard from './ValidationDocumentCard';
 import FormField from './FormField';
-import { AlertIcon, ArrowRightIcon, CheckIcon, DownloadIcon, SparkIcon } from './Icon';
+import { AlertIcon, ArrowRightIcon, CheckIcon, DownloadIcon, PaperclipIcon, SparkIcon } from './Icon';
 import {
   buildChatbotAlerts,
   buildChatbotDocuments,
@@ -24,11 +26,76 @@ import {
   getChatbotProgressIndex
 } from '../data/mockChatbot';
 import { createMockFileMeta, formatBytes } from '../data/mockReembolso';
+import {
+  applyInformationCorrection,
+  buildInformationSnapshot,
+  getInformationFieldLabel,
+  getInformationFieldPrompt,
+  informationQuickReplies,
+  parseInformationInput,
+  validateInformationValue
+} from '../data/chatbotInformation';
+import {
+  applyClaimCorrection,
+  buildClaimSnapshot,
+  getClaimFieldLabel,
+  getClaimFieldPrompt,
+  getClaimQuickReplies,
+  getNextRequiredClaimField,
+  parseClaimInput,
+  validateClaimValue
+} from '../data/chatbotClaim';
 
 const flowLabels = {
   reembolso: 'Reembolso',
   cirugia_programada: 'Cirugía Programada'
 };
+
+// Escenario demostrativo: permite enseñar resultados mixtos sin depender de OCR real.
+// Los demás documentos cargados se validan correctamente para que el contraste sea visible.
+const documentValidationMocks = {
+  reembolso: {
+    informe: {
+      status: 'requires_review',
+      validationNote: 'El nombre identificado presenta una diferencia frente al Aviso de Accidente.'
+    },
+    domicilio: {
+      status: 'illegible',
+      validationNote: 'No fue posible leer con claridad la fecha de emisión del comprobante.'
+    }
+  },
+  cirugia_programada: {
+    informe: {
+      status: 'requires_review',
+      validationNote: 'La firma del médico tratante requiere una revisión adicional.'
+    },
+    estudios: {
+      status: 'illegible',
+      validationNote: 'La interpretación de estudios no se pudo leer con claridad.'
+    }
+  }
+};
+
+function getDocumentValidationResult(flow, documentId, scenario) {
+  if (scenario === 'mixed') {
+    return documentValidationMocks[flow]?.[documentId] ?? {
+      status: 'validated',
+      validationNote: 'Documento validado automáticamente.'
+    };
+  }
+
+  if (scenario === 'review' && flow === 'reembolso' && documentId === 'informe') {
+    return {
+      status: 'requires_review',
+      validationNote: 'Nombre con diferencia detectada.'
+    };
+  }
+
+  return {
+    status: 'validated',
+    validationNote: 'Documento validado automáticamente.'
+  };
+}
 
 const guideActions = {
   info: [
@@ -55,6 +122,39 @@ function createUserMessage(text) {
   return { id: `user-${Date.now()}-${Math.random().toString(16).slice(2)}`, role: 'user', text, timeLabel: getCurrentTimeLabel() };
 }
 
+function createAttachmentMessage(documentLabel, files) {
+  return {
+    id: `attachment-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    role: 'user',
+    type: 'document-attachment',
+    documentLabel,
+    files: files.map((file) => ({ ...file })),
+    timeLabel: getCurrentTimeLabel()
+  };
+}
+
+function createInformationSummaryMessage(source, text = 'Revisa la información que tengo hasta ahora:') {
+  return {
+    id: `information-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    role: 'assistant',
+    type: 'information-summary',
+    text,
+    snapshot: buildInformationSnapshot(source.policy, source.person, source.contact),
+    timeLabel: getCurrentTimeLabel()
+  };
+}
+
+function createClaimSummaryMessage(source, text = 'Revisa los datos de la reclamación que tengo hasta ahora:') {
+  return {
+    id: `claim-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    role: 'assistant',
+    type: 'claim-summary',
+    text,
+    snapshot: buildClaimSnapshot(source.claimant, source.flow),
+    timeLabel: getCurrentTimeLabel()
+  };
+}
+
 function createStartingData() {
   const base = createChatbotPreset('welcome');
   return {
@@ -74,7 +174,11 @@ function createStartingData() {
     contextCollapsed: true,
     folio: `FOLIO-${new Date().getFullYear()}-${Math.floor(Math.random() * 9000 + 1000)}`,
     processingHint: '',
-    activeDocumentId: null
+    activeDocumentId: null,
+    informationCorrectionField: null,
+    informationConfirmed: false,
+    claimCorrectionField: null,
+    claimConfirmed: false
   };
 }
 
@@ -107,7 +211,11 @@ function hydratePreset(presetId = 'welcome') {
     processingHint: '',
     activeDocumentId: null,
     downloadedFormats: [],
-    showResetPrompt: false
+    showResetPrompt: false,
+    informationCorrectionField: null,
+    informationConfirmed: false,
+    claimCorrectionField: null,
+    claimConfirmed: false
   };
 }
 
@@ -153,11 +261,11 @@ function getClaimErrors(claimant, flow) {
 
 function buildDynamicAlerts(flow, documents, scenario) {
   if (scenario === 'review' && flow === 'reembolso') {
-    return buildChatbotAlerts(flow, scenario).map((alert) => ({ ...alert }));
+    return buildChatbotAlerts(flow, scenario).map((alert) => ({ ...alert, status: alert.status ?? 'active' }));
   }
 
   if (flow === 'cirugia_programada' && scenario === 'flow') {
-    return buildChatbotAlerts(flow, scenario).map((alert) => ({ ...alert }));
+    return buildChatbotAlerts(flow, scenario).map((alert) => ({ ...alert, status: alert.status ?? 'active' }));
   }
 
   const alerts = [];
@@ -243,88 +351,99 @@ function getProgressIndex(stage) {
   return map[stage] ?? -1;
 }
 
+function isInformationStage(stage) {
+  return stage === 'information-policy' || stage === 'information-requester' || stage === 'information-contact';
+}
+
 function getStageCopy(stage, entryMode, flow) {
   const flowLabel = flow ? flowLabels[flow] : 'el trámite';
 
   if (stage === 'welcome') {
     return {
-      title: 'Hola, soy el asistente de Siniestros GMM de Allianz México.',
-      description: 'Puedo ayudarte a conocer los requisitos o a iniciar un trámite.'
+      title: 'Hola, soy tu asistente de Siniestros GMM de Allianz México.',
+      description: 'Puedo ayudarte a revisar requisitos o a iniciar tu trámite paso a paso.'
     };
   }
 
   if (stage === 'flow-intro') {
+    if (flow === 'reembolso') {
+      return {
+        title: 'Claro, te ayudo con tu trámite de reembolso.',
+        description: 'Estos son los documentos principales que necesitarás. Revisa la lista y elige cómo quieres continuar.'
+      };
+    }
+
     return entryMode === 'info'
       ? {
-          title: `Te ayudaré a revisar la información de ${flowLabel}.`,
-          description: 'Primero selecciona el trámite que necesitas para mostrarte los requisitos y formatos.'
+          title: `Te comparto lo necesario sobre ${flowLabel}.`,
+          description: 'Te mostraré solo lo esencial y tú me dices por dónde quieres seguir.'
         }
       : {
-          title: `Vamos a iniciar tu trámite de ${flowLabel}.`,
-          description: 'Te mostraré los documentos y después iremos capturando la información necesaria.'
+          title: `Perfecto, te acompaño con ${flowLabel}.`,
+          description: 'Vamos paso a paso para que no tengas que pensar en todo al mismo tiempo.'
         };
   }
 
   if (stage === 'documents') {
     return {
-      title: `Carguemos tus documentos de ${flowLabel}.`,
-      description: 'Adjunta los archivos requeridos desde cada tarjeta. Puedes continuar aunque algunos queden pendientes.'
+      title: `Empecemos con los documentos de ${flowLabel}.`,
+      description: 'Te iré pidiendo cada archivo de forma clara para que avancemos sin prisas.'
     };
   }
 
   if (stage === 'validation-processing') {
     return {
-      title: 'Estamos validando tus documentos',
-      description: 'Revisamos legibilidad, coincidencias y observaciones antes de continuar con tu trámite.'
+      title: 'Estoy revisando tus documentos',
+      description: 'Dame un momento mientras verifico lo cargado y preparo el siguiente paso.'
     };
   }
 
   if (stage === 'validation-results') {
     return {
-      title: 'Revisa los resultados de validación',
-      description: 'Los conteos y observaciones se basan en el estado actual de tus documentos.'
+      title: 'Ya terminé la revisión',
+      description: 'Te muestro lo más importante para que decidas si quieres corregir algo.'
     };
   }
 
   if (stage === 'information-policy' || stage === 'information-requester' || stage === 'information-contact') {
     return {
-      title: 'Completemos tus datos de información',
-      description: 'Los campos detectados siguen siendo editables para que puedas corregirlos si es necesario.'
+      title: 'Vamos con tus datos',
+      description: 'Si algo no coincide, lo puedes corregir aquí mismo antes de avanzar.'
     };
   }
 
   if (stage === 'claim') {
     return {
-      title: 'Captura la información de la reclamación',
-      description: 'Los datos precargados siguen siendo editables y se usan para preparar la siguiente etapa.'
+      title: 'Revisemos la reclamación',
+      description: 'Te haré una pregunta a la vez para dejar esta parte lista sin complicaciones.'
     };
   }
 
   if (stage === 'review') {
     return {
-      title: 'Revisemos el resumen antes de enviar',
-      description: 'Verifica que todo esté correcto y usa los accesos rápidos para corregir lo que necesites.'
+      title: 'Ya casi terminamos',
+      description: 'Revisemos juntos el resumen antes de enviar tu trámite.'
     };
   }
 
   if (stage === 'submitting') {
     return {
       title: 'Enviando trámite',
-      description: 'Estamos preparando tu solicitud para continuar con la confirmación final.'
+      description: 'Estoy preparando tu solicitud para mostrarte la confirmación final.'
     };
   }
 
   if (stage === 'success') {
     return {
       title: 'Tu solicitud fue recibida correctamente',
-      description: 'Puedes descargar el resumen o iniciar una nueva conversación cuando lo necesites.'
+      description: 'Si quieres, puedes descargar el resumen o iniciar otra conversación.'
     };
   }
 
   if (stage === 'out-of-scope') {
     return {
       title: 'Esta consulta requiere atención adicional',
-      description: 'Puedo orientarte sobre los canales disponibles o regresar al menú principal.'
+      description: 'Puedo orientarte con los canales disponibles o ayudarte a empezar otra vez.'
     };
   }
 
@@ -334,22 +453,31 @@ function getStageCopy(stage, entryMode, flow) {
   };
 }
 
-function ChoiceButton({ label, onClick, tone = 'blue' }) {
+function ChoiceButton({ label, onClick, tone = 'blue', supportText = '', fullWidth = false }) {
   const styles = {
     blue: 'border-[#C7D8F1] bg-white text-[#003781] hover:bg-[#F4F8FF]',
     dark: 'border-[#003781] bg-[#003781] text-white hover:bg-[#002356]',
-    light: 'border-[#DDE5EF] bg-white text-[#434751] hover:bg-[#F7FAFC]'
+    light: 'border-[#DDE5EF] bg-white text-[#434751] hover:bg-[#F7FAFC]',
+    reply: 'border-[#D8E3F1] bg-[#F8FBFF] text-[#003781] shadow-sm hover:border-[#BFD2EC] hover:bg-white'
   };
 
   return (
     <button
       type="button"
-      className={`focus-ring inline-flex items-center justify-center rounded-full border px-4 py-2 text-sm font-semibold transition hover:-translate-y-0.5 ${styles[tone]}`}
+      className={`focus-ring ${fullWidth ? 'flex w-full items-start justify-between gap-3 text-left' : 'inline-flex items-center justify-center gap-2'} rounded-full border px-4 py-2 text-sm font-semibold transition hover:-translate-y-0.5 ${styles[tone]}`}
       onClick={onClick}
     >
-      {label}
+      <span className="min-w-0">
+        <span className="block">{label}</span>
+        {supportText ? <span className={`mt-1 block text-xs font-normal leading-5 ${tone === 'dark' ? 'text-white/80' : 'text-[#6B7280]'}`}>{supportText}</span> : null}
+      </span>
+      {tone === 'reply' ? <ArrowRightIcon className="mt-0.5 h-4 w-4 shrink-0 text-[#8BA4CB]" /> : null}
     </button>
   );
+}
+
+function AssistantCue({ text }) {
+  return <ChatMessage role="assistant" text={text} />;
 }
 
 function FormatLibraryCard({ flow, onDownload, onDownloadAll }) {
@@ -358,8 +486,8 @@ function FormatLibraryCard({ flow, onDownload, onDownloadAll }) {
 
   return (
     <section className="rounded-[24px] border border-[#E0E6ED] bg-white p-5 shadow-sm sm:p-6">
-      <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-[#006494]">Formatos disponibles</p>
-      <h3 className="mt-2 text-[22px] font-semibold leading-7 text-[#181C1E]">Descarga simulada de formatos</h3>
+      <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-[#006494]">Formatos</p>
+      <h3 className="mt-2 text-[20px] font-semibold leading-7 text-[#181C1E]">Descarga lo que necesites</h3>
       <p className="mt-2 max-w-3xl text-sm leading-6 text-[#434751]">
         {guide?.recommendation || 'Descarga los formatos institucionales que correspondan al trámite seleccionado.'}
       </p>
@@ -403,56 +531,66 @@ function FormatLibraryCard({ flow, onDownload, onDownloadAll }) {
 
 function FlowGuideCard({ flow, entryMode, onFlowSelect, onContinue, onInfoOnly, onOtherFlow, onFormats }) {
   const guide = flow ? chatbotFlowGuides[flow] : null;
+  const isReimbursement = flow === 'reembolso';
   const requirements = guide?.requirements ?? [];
   const titleCopy = getStageCopy('flow-intro', entryMode, flow);
+  const flowChoices = [
+    {
+      id: 'reembolso',
+      label: 'Reembolso',
+      supportText: 'Solicita el pago de gastos médicos.'
+    },
+    {
+      id: 'cirugia_programada',
+      label: 'Cirugía Programada',
+      supportText: 'Programa la autorización de un procedimiento quirúrgico.'
+    }
+  ];
+  const followUpCopy =
+    entryMode === 'info'
+      ? 'Cuando estés listo, puedo ayudarte a iniciar el trámite y revisar cada requisito contigo.'
+      : 'Si ya tienes estos documentos, podemos continuar. También puedo ayudarte a descargar los formatos que te falten.';
 
   return (
-    <section className="rounded-[24px] border border-[#E0E6ED] bg-white p-5 shadow-sm sm:p-6">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-        <div className="max-w-3xl">
-          <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-[#006494]">Guía inicial</p>
-          <h3 className="mt-2 text-[22px] font-semibold leading-7 text-[#181C1E]">{titleCopy.title}</h3>
-          <p className="mt-2 text-sm leading-6 text-[#434751]">{titleCopy.description}</p>
-        </div>
-
-        <div className="rounded-full bg-[#EFF6FF] px-4 py-2 text-sm font-semibold text-[#003781]">
-          {guide?.contactPhone ? `Teléfono de apoyo: ${guide.contactPhone}` : 'Asistente virtual'}
-        </div>
-      </div>
+    <section className="space-y-3">
+      <ChatMessage role="assistant" text={titleCopy.title} />
+      <ChatMessage role="assistant" text={titleCopy.description} />
 
       {!flow ? (
-        <div className="mt-5 grid gap-3 sm:grid-cols-2">
-          <button
-            type="button"
-            className="focus-ring rounded-[20px] border border-[#DDE5EF] bg-white p-4 text-left transition hover:-translate-y-0.5 hover:bg-[#F7FAFC]"
-            onClick={() => onFlowSelect('reembolso')}
-          >
-            <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-[#006494]">Reembolso</p>
-            <p className="mt-2 text-sm leading-6 text-[#434751]">Solicita el pago de gastos médicos de forma digital.</p>
-          </button>
-          <button
-            type="button"
-            className="focus-ring rounded-[20px] border border-[#DDE5EF] bg-white p-4 text-left transition hover:-translate-y-0.5 hover:bg-[#F7FAFC]"
-            onClick={() => onFlowSelect('cirugia_programada')}
-          >
-            <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-[#006494]">Cirugía Programada</p>
-            <p className="mt-2 text-sm leading-6 text-[#434751]">Programa la autorización de un procedimiento quirúrgico.</p>
-          </button>
+        <div className="flex flex-wrap gap-2">
+          {flowChoices.map((choice) => (
+            <ChoiceButton
+              key={choice.id}
+              label={choice.label}
+              supportText=""
+              tone="reply"
+              onClick={() => onFlowSelect(choice.id)}
+            />
+          ))}
         </div>
       ) : (
         <>
-          <div className="mt-5 rounded-[22px] border border-[#E0E6ED] bg-[#F7FAFC] p-4">
-            <p className="text-sm font-semibold text-[#181C1E]">Documentos y recomendaciones</p>
-            <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+          <div className="rounded-[22px] border border-[#E0E6ED] bg-[#FBFDFF] px-4 py-4 shadow-sm">
+            <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-[#006494]">Lo esencial</p>
+            <div className="mt-3 flex flex-wrap gap-2">
               {requirements.map((item) => (
-                <li key={item} className="rounded-2xl border border-[#E0E6ED] bg-white px-3 py-3 text-sm leading-6 text-[#434751]">
+                <span
+                  key={item}
+                  className="inline-flex items-center rounded-full border border-[#DDE5EF] bg-white px-3 py-1.5 text-xs font-medium leading-5 text-[#434751]"
+                >
                   {item}
-                </li>
+                </span>
               ))}
-            </ul>
+            </div>
           </div>
 
-          <div className="mt-5 grid gap-3 sm:grid-cols-3">
+          {isReimbursement ? (
+            <p className="px-1 text-sm leading-6 text-[#5F6B7A]">¿Te falta algún formato? Puedo ayudarte a descargarlo.</p>
+          ) : (
+            <ChatMessage role="assistant" text={followUpCopy} />
+          )}
+
+          <div className="flex flex-wrap gap-2">
             {guideActions[entryMode]?.map((action) => (
               <ChoiceButton
                 key={action.id}
@@ -474,6 +612,12 @@ function FlowGuideCard({ flow, entryMode, onFlowSelect, onContinue, onInfoOnly, 
               />
             ))}
           </div>
+
+          {guide?.contactPhone ? (
+            <p className="px-1 text-xs leading-5 text-[#6B7280]">
+              ¿Necesitas apoyo adicional? <span className="font-semibold text-[#003781]">{guide.contactPhone}</span>
+            </p>
+          ) : null}
         </>
       )}
     </section>
@@ -680,22 +824,6 @@ function ReviewSummaryCard({
         </div>
       </div>
 
-      <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
-        <button
-          type="button"
-          className="focus-ring inline-flex items-center justify-center rounded-full border border-[#DDE5EF] bg-white px-5 py-2.5 text-sm font-semibold text-[#434751] transition hover:bg-[#F7FAFC]"
-          onClick={() => onEditSection('documents')}
-        >
-          Ajustar documentos
-        </button>
-        <button
-          type="button"
-          className="focus-ring inline-flex items-center justify-center rounded-full bg-[#003781] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#002356]"
-          onClick={() => onEditSection('confirm')}
-        >
-          Sí, confirmar y enviar
-        </button>
-      </div>
     </section>
   );
 }
@@ -785,19 +913,26 @@ function chatbotReducer(state, action) {
       return {
         ...state,
         flow: action.flow,
-        scenario: action.scenario ?? (action.flow === 'cirugia_programada' ? 'flow' : 'blank'),
-        documents: action.documents ?? buildChatbotDocuments(action.flow, action.scenario ?? (action.flow === 'cirugia_programada' ? 'flow' : 'blank')),
+        scenario: action.scenario ?? 'mixed',
+        documents: action.documents ?? buildChatbotDocuments(action.flow, action.scenario ?? 'mixed'),
         alerts: action.alerts ?? [],
         ignoredAlerts: [],
         acceptedAlerts: [],
         validationPhase: 'idle',
         validationStageIndex: 0,
         validationCompleted: false,
+        preloadedDocumentTraceAdded: false,
         reviewConfirmed: false,
-        activeDocumentId: null
+        activeDocumentId: null,
+        informationCorrectionField: null,
+        informationConfirmed: false,
+        claimCorrectionField: null,
+        claimConfirmed: false
       };
     case 'SET_MESSAGES':
       return { ...state, messages: action.value };
+    case 'SET_PRELOADED_DOCUMENT_TRACE_ADDED':
+      return { ...state, preloadedDocumentTraceAdded: action.value };
     case 'ADD_MESSAGE':
       return { ...state, messages: [...state.messages, action.message] };
     case 'SET_DRAFT':
@@ -823,8 +958,25 @@ function chatbotReducer(state, action) {
     }
     case 'SET_CONTACT_FIELD':
       return { ...state, contact: { ...state.contact, [action.field]: action.value } };
+    case 'APPLY_INFORMATION_CORRECTION':
+      return {
+        ...state,
+        policy: action.value.policy,
+        person: action.value.person,
+        contact: action.value.contact
+      };
+    case 'SET_INFORMATION_CORRECTION_FIELD':
+      return { ...state, informationCorrectionField: action.value };
+    case 'SET_INFORMATION_CONFIRMED':
+      return { ...state, informationConfirmed: action.value };
     case 'SET_CLAIMANT_FIELD':
       return { ...state, claimant: { ...state.claimant, [action.field]: action.value } };
+    case 'APPLY_CLAIM_CORRECTION':
+      return { ...state, claimant: action.value };
+    case 'SET_CLAIM_CORRECTION_FIELD':
+      return { ...state, claimCorrectionField: action.value };
+    case 'SET_CLAIM_CONFIRMED':
+      return { ...state, claimConfirmed: action.value };
     case 'SET_DOCUMENT_FILES':
       return {
         ...state,
@@ -907,8 +1059,11 @@ export default function ChatbotWorkspace({ onExit }) {
   const messageSeenRef = useRef(0);
 
   const progressIndex = useMemo(() => getProgressIndex(state.stage), [state.stage]);
-  const summary = useMemo(() => buildSummary(state.documents, state.alerts.filter((alert) => !state.ignoredAlerts.includes(alert.id) && alert.status === 'active')), [state.documents, state.alerts, state.ignoredAlerts]);
-  const activeAlerts = useMemo(() => state.alerts.filter((alert) => !state.ignoredAlerts.includes(alert.id) && alert.status === 'active'), [state.alerts, state.ignoredAlerts]);
+  const activeAlerts = useMemo(
+    () => state.alerts.filter((alert) => !state.ignoredAlerts.includes(alert.id) && (alert.status ?? 'active') === 'active'),
+    [state.alerts, state.ignoredAlerts]
+  );
+  const summary = useMemo(() => buildSummary(state.documents, activeAlerts), [state.documents, activeAlerts]);
   const validatedDocuments = useMemo(() => getValidatedDocuments(state.documents), [state.documents]);
   const reviewDocuments = useMemo(() => getReviewDocuments(state.documents), [state.documents]);
   const visibleFlowDocuments = useMemo(() => (state.flow ? getChatbotFlowDocuments(state.flow) : []), [state.flow]);
@@ -933,7 +1088,7 @@ export default function ChatbotWorkspace({ onExit }) {
   }, []);
 
   useEffect(() => {
-    if (state.stage !== 'validation-processing') return undefined;
+    if (state.stage !== 'validation-processing' || state.validationPhase === 'results') return undefined;
 
     validationTimersRef.current.forEach((timerId) => clearTimeout(timerId));
     validationTimersRef.current = [];
@@ -952,6 +1107,7 @@ export default function ChatbotWorkspace({ onExit }) {
       dispatch({ type: 'SET_VALIDATION_STAGE_INDEX', value: stageList.length - 1 });
       dispatch({ type: 'SET_VALIDATION_PHASE', value: 'results' });
       dispatch({ type: 'SET_VALIDATION_COMPLETED', value: true });
+      dispatch({ type: 'SET_STAGE', value: 'validation-results' });
       dispatch(
         {
           type: 'ADD_MESSAGE',
@@ -995,90 +1151,280 @@ export default function ChatbotWorkspace({ onExit }) {
     if (assistantText) dispatch({ type: 'ADD_MESSAGE', message: createAssistantMessage(assistantText) });
   };
 
+  const enterInformationReview = (introText = 'Ahora revisemos la información que tengo del trámite.') => {
+    dispatch({ type: 'SET_INFORMATION_CORRECTION_FIELD', value: null });
+    dispatch({ type: 'SET_INFORMATION_CONFIRMED', value: false });
+    if (introText) dispatch({ type: 'ADD_MESSAGE', message: createAssistantMessage(introText) });
+    dispatch({ type: 'ADD_MESSAGE', message: createInformationSummaryMessage(state) });
+    dispatch({ type: 'SET_STAGE', value: 'information-policy' });
+  };
+
+  const enterClaimReview = (introText = 'Ahora revisemos los datos de la reclamación.') => {
+    dispatch({ type: 'SET_CLAIM_CONFIRMED', value: false });
+    dispatch({ type: 'SET_STAGE', value: 'claim' });
+    if (introText) dispatch({ type: 'ADD_MESSAGE', message: createAssistantMessage(introText) });
+
+    const missingField = getNextRequiredClaimField(state.claimant, state.flow);
+    if (missingField) {
+      dispatch({ type: 'SET_CLAIM_CORRECTION_FIELD', value: missingField });
+      dispatch({ type: 'ADD_MESSAGE', message: createAssistantMessage(getClaimFieldPrompt(missingField)) });
+      return;
+    }
+
+    dispatch({ type: 'SET_CLAIM_CORRECTION_FIELD', value: null });
+    dispatch({ type: 'ADD_MESSAGE', message: createClaimSummaryMessage(state) });
+  };
+
+  const handleInformationInput = (text, appendUserMessage = false) => {
+    if (appendUserMessage) dispatch({ type: 'ADD_MESSAGE', message: createUserMessage(text) });
+
+    const parsed = parseInformationInput(text, state.informationCorrectionField);
+
+    if (parsed.intent === 'confirm') {
+      if (!canContinueInfo) {
+        const firstError = Object.values(contactErrors).find(Boolean);
+        const relationshipError =
+          state.person.relationship === 'Otro' && !String(state.person.parentesco ?? '').trim()
+            ? 'Necesito el parentesco de quien realiza el trámite antes de continuar.'
+            : '';
+        dispatch({
+          type: 'ADD_MESSAGE',
+          message: createAssistantMessage(firstError || relationshipError || 'Todavía falta completar un dato antes de continuar.')
+        });
+        return;
+      }
+
+      dispatch({ type: 'SET_INFORMATION_CONFIRMED', value: true });
+      dispatch({ type: 'SET_INFORMATION_CORRECTION_FIELD', value: null });
+      dispatch({ type: 'ADD_MESSAGE', message: createAssistantMessage('Perfecto, la información quedó confirmada.') });
+      enterClaimReview('Ahora continuemos con los datos de la reclamación. Puedes corregir cualquier dato escribiéndolo aquí mismo.');
+      return;
+    }
+
+    if (parsed.intent === 'request-value') {
+      dispatch({ type: 'SET_INFORMATION_CORRECTION_FIELD', value: parsed.field });
+      dispatch({ type: 'ADD_MESSAGE', message: createAssistantMessage(getInformationFieldPrompt(parsed.field)) });
+      return;
+    }
+
+    if (parsed.intent === 'ambiguous' || parsed.intent === 'unknown') {
+      dispatch({ type: 'SET_INFORMATION_CORRECTION_FIELD', value: null });
+      dispatch({ type: 'ADD_MESSAGE', message: createAssistantMessage('Claro, ¿qué dato quieres modificar?') });
+      return;
+    }
+
+    const validation = validateInformationValue(parsed.field, parsed.value);
+    if (!validation.valid) {
+      dispatch({ type: 'SET_INFORMATION_CORRECTION_FIELD', value: parsed.field });
+      dispatch({ type: 'ADD_MESSAGE', message: createAssistantMessage(validation.error) });
+      return;
+    }
+
+    const nextInformation = applyInformationCorrection(
+      { policy: state.policy, person: state.person, contact: state.contact },
+      parsed.field,
+      validation.value
+    );
+
+    dispatch({ type: 'APPLY_INFORMATION_CORRECTION', value: nextInformation });
+    dispatch({ type: 'SET_INFORMATION_CORRECTION_FIELD', value: null });
+    dispatch({
+      type: 'ADD_MESSAGE',
+      message: createAssistantMessage(`Listo, actualicé ${getInformationFieldLabel(parsed.field)}.`)
+    });
+    dispatch({
+      type: 'ADD_MESSAGE',
+      message: createInformationSummaryMessage(nextInformation, 'Gracias. Te muestro cómo quedó:')
+    });
+  };
+
+  const handleClaimInput = (text, appendUserMessage = false) => {
+    if (appendUserMessage) dispatch({ type: 'ADD_MESSAGE', message: createUserMessage(text) });
+
+    const parsed = parseClaimInput(text, state.claimCorrectionField);
+
+    if (parsed.intent === 'confirm') {
+      if (!canContinueClaim) {
+        const firstError = Object.values(claimErrors).find(Boolean);
+        dispatch({
+          type: 'ADD_MESSAGE',
+          message: createAssistantMessage(firstError || 'Todavía falta completar un dato de la reclamación antes de continuar.')
+        });
+        return;
+      }
+
+      dispatch({ type: 'SET_CLAIM_CONFIRMED', value: true });
+      dispatch({ type: 'SET_CLAIM_CORRECTION_FIELD', value: null });
+      dispatch({ type: 'ADD_MESSAGE', message: createAssistantMessage('Perfecto, los datos de la reclamación quedaron confirmados.') });
+      dispatch({ type: 'ADD_MESSAGE', message: createAssistantMessage('Ya casi terminamos. Revisemos juntos el resumen antes de enviarlo.') });
+      dispatch({ type: 'SET_STAGE', value: 'review' });
+      return;
+    }
+
+    if (parsed.intent === 'request-value') {
+      dispatch({ type: 'SET_CLAIM_CORRECTION_FIELD', value: parsed.field });
+      dispatch({ type: 'ADD_MESSAGE', message: createAssistantMessage(getClaimFieldPrompt(parsed.field)) });
+      return;
+    }
+
+    if (parsed.intent === 'ambiguous' || parsed.intent === 'unknown') {
+      dispatch({ type: 'SET_CLAIM_CORRECTION_FIELD', value: null });
+      dispatch({ type: 'ADD_MESSAGE', message: createAssistantMessage('Claro, ¿qué dato de la reclamación quieres modificar?') });
+      return;
+    }
+
+    const validation = validateClaimValue(parsed.field, parsed.value);
+    if (!validation.valid) {
+      dispatch({ type: 'SET_CLAIM_CORRECTION_FIELD', value: parsed.field });
+      dispatch({ type: 'ADD_MESSAGE', message: createAssistantMessage(validation.error) });
+      return;
+    }
+
+    const nextClaimant = applyClaimCorrection(state.claimant, parsed.field, validation.value);
+    const nextMissingField = getNextRequiredClaimField(nextClaimant, state.flow);
+    dispatch({ type: 'APPLY_CLAIM_CORRECTION', value: nextClaimant });
+    dispatch({
+      type: 'ADD_MESSAGE',
+      message: createAssistantMessage(`Listo, actualicé ${getClaimFieldLabel(parsed.field)}.`)
+    });
+
+    if (nextMissingField) {
+      dispatch({ type: 'SET_CLAIM_CORRECTION_FIELD', value: nextMissingField });
+      dispatch({ type: 'ADD_MESSAGE', message: createAssistantMessage(getClaimFieldPrompt(nextMissingField)) });
+      return;
+    }
+
+    dispatch({ type: 'SET_CLAIM_CORRECTION_FIELD', value: null });
+    dispatch({
+      type: 'ADD_MESSAGE',
+      message: createClaimSummaryMessage(
+        { claimant: nextClaimant, flow: state.flow },
+        state.flow === 'cirugia_programada'
+          ? 'Gracias. Ya tengo los datos necesarios de la programación. Revisa cómo quedó:'
+          : 'Gracias. Te muestro cómo quedó:'
+      )
+    });
+  };
+
   const handleIntent = (intent) => {
     const item = chatbotQuickActions.find((option) => option.id === intent);
     if (!item) return;
 
-    appendUserAndAssistant(item.label);
+    dispatch({ type: 'ADD_MESSAGE', message: createUserMessage(item.label) });
 
     if (intent === 'info') {
       dispatch({ type: 'SET_ENTRY_MODE', value: 'info' });
       dispatch({ type: 'SET_STAGE', value: 'flow-intro' });
-      dispatch({ type: 'ADD_MESSAGE', message: createAssistantMessage('Claro. Primero dime si necesitas información de Reembolso o de Cirugía Programada.') });
       return;
     }
 
     if (intent === 'start') {
       dispatch({ type: 'SET_ENTRY_MODE', value: 'start' });
       dispatch({ type: 'SET_STAGE', value: 'flow-intro' });
-      dispatch({ type: 'ADD_MESSAGE', message: createAssistantMessage('Perfecto. Primero selecciona el trámite que deseas realizar.') });
       return;
     }
 
     if (intent === 'formats') {
       dispatch({ type: 'SET_ENTRY_MODE', value: 'start' });
       dispatch({ type: 'SET_STAGE', value: state.flow ? 'formats' : 'flow-intro' });
-      dispatch({ type: 'ADD_MESSAGE', message: createAssistantMessage('Te mostraré los formatos disponibles para el trámite.') });
       return;
     }
 
     if (intent === 'status' || intent === 'help') {
       dispatch({ type: 'SET_STAGE', value: 'out-of-scope' });
-      dispatch({ type: 'ADD_MESSAGE', message: createAssistantMessage('Puedo orientarte sobre los trámites o mostrarte los canales de apoyo disponibles.') });
     }
   };
 
-  const handleFlowSelect = (flow) => {
+  const handleFlowSelect = (flow, nextEntryMode = 'start') => {
     const label = flowLabels[flow];
-    dispatch({ type: 'SET_FLOW', flow, scenario: flow === 'cirugia_programada' ? 'flow' : 'blank' });
+    dispatch({ type: 'SET_FLOW', flow, scenario: 'mixed' });
+    dispatch({ type: 'SET_ENTRY_MODE', value: nextEntryMode });
     dispatch({ type: 'ADD_MESSAGE', message: createUserMessage(label) });
-    dispatch({ type: 'ADD_MESSAGE', message: createAssistantMessage(`Perfecto. Vamos a revisar los requisitos de ${label}.`) });
     dispatch({ type: 'SET_STAGE', value: 'flow-intro' });
   };
 
+  // The guide is initially rendered as stage content. Persist its wording before
+  // changing stages so the user keeps a complete conversational trail.
+  const persistFlowGuideTrace = () => {
+    const guideCopy = getStageCopy('flow-intro', state.entryMode, state.flow);
+    dispatch({ type: 'ADD_MESSAGE', message: createAssistantMessage(guideCopy.title) });
+    dispatch({ type: 'ADD_MESSAGE', message: createAssistantMessage(guideCopy.description) });
+  };
+
+  const addDocumentsIntroMessage = () => {
+    const flowLabel = state.flow ? flowLabels[state.flow] : 'tu trámite';
+    dispatch({
+      type: 'ADD_MESSAGE',
+      message: createAssistantMessage(`Muy bien. Empecemos con los documentos de ${flowLabel}. Te iré pidiendo cada uno paso a paso.`)
+    });
+  };
+
+  // The mixed scenario starts with example files already available. Record them
+  // as user attachments so the conversation keeps the same audit trail as a
+  // real upload, without adding the same documents more than once.
+  const addPreloadedDocumentTrace = () => {
+    if (state.preloadedDocumentTraceAdded) return false;
+
+    const attachedDocuments = state.documents.filter((document) => document.files.length > 0);
+    if (attachedDocuments.length === 0) return false;
+
+    dispatch({ type: 'SET_PRELOADED_DOCUMENT_TRACE_ADDED', value: true });
+    attachedDocuments.forEach((document) => {
+      dispatch({
+        type: 'ADD_MESSAGE',
+        message: createAttachmentMessage(document.label, document.files)
+      });
+    });
+    dispatch({
+      type: 'ADD_MESSAGE',
+      message: createAssistantMessage(`Gracias, ya recibí ${attachedDocuments.length} documentos. Ahora los revisaré uno por uno.`)
+    });
+
+    return true;
+  };
+
   const handleGuideContinue = (nextStage) => {
+    persistFlowGuideTrace();
+
     if (nextStage === 'documents') {
       dispatch({ type: 'ADD_MESSAGE', message: createUserMessage('Ya tengo los documentos.') });
-      dispatch({ type: 'ADD_MESSAGE', message: createAssistantMessage('Excelente. Ahora puedes cargarlos desde las tarjetas de cada documento.') });
+      if (!addPreloadedDocumentTrace()) addDocumentsIntroMessage();
       dispatch({ type: 'SET_STAGE', value: 'documents' });
       return;
     }
 
     if (nextStage === 'validation') {
       dispatch({ type: 'SET_STAGE', value: 'validation-processing' });
-      dispatch({ type: 'ADD_MESSAGE', message: createUserMessage('Continuar sin descargar.') });
-      dispatch({ type: 'ADD_MESSAGE', message: createAssistantMessage('Continuamos con la carga y validación de tus documentos.') });
       return;
     }
 
     if (nextStage === 'info-only') {
       dispatch({ type: 'ADD_MESSAGE', message: createUserMessage('No, solo necesitaba información.') });
-      dispatch({ type: 'ADD_MESSAGE', message: createAssistantMessage('Perfecto. Aquí estaré cuando quieras iniciar el trámite o descargar formatos.') });
       dispatch({ type: 'SET_STAGE', value: 'welcome' });
       return;
     }
 
     if (nextStage === 'another-tramite') {
       dispatch({ type: 'ADD_MESSAGE', message: createUserMessage('Consultar otro trámite.') });
-      dispatch({ type: 'ADD_MESSAGE', message: createAssistantMessage('Claro. Selecciona una nueva intención cuando quieras continuar.') });
       dispatch({ type: 'SET_STAGE', value: 'welcome' });
       return;
     }
 
     if (nextStage === 'start-now') {
       dispatch({ type: 'ADD_MESSAGE', message: createUserMessage('Sí, iniciar.') });
-      dispatch({ type: 'ADD_MESSAGE', message: createAssistantMessage('Muy bien, comenzamos con la carga documental.') });
+      if (!addPreloadedDocumentTrace()) addDocumentsIntroMessage();
       dispatch({ type: 'SET_STAGE', value: 'documents' });
     }
   };
 
   const handleDownload = (document) => {
     dispatch({ type: 'SET_DOWNLOADED_FORMATS', value: [...state.downloadedFormats, document.id] });
-    dispatch({ type: 'ADD_MESSAGE', message: createAssistantMessage(`Descarga simulada preparada para ${document.label}.`) });
+    dispatch({ type: 'ADD_MESSAGE', message: createAssistantMessage(`Ya dejé listo el formato de ${document.label}.`) });
   };
 
   const handleDownloadAll = () => {
-    dispatch({ type: 'ADD_MESSAGE', message: createAssistantMessage('Preparé la descarga simulada de todos los formatos disponibles para este trámite.') });
+    dispatch({ type: 'ADD_MESSAGE', message: createAssistantMessage('Listo. Dejé preparados todos los formatos disponibles para este trámite.') });
+    if (!addPreloadedDocumentTrace()) addDocumentsIntroMessage();
     dispatch({ type: 'SET_STAGE', value: 'documents' });
   };
 
@@ -1099,19 +1445,31 @@ export default function ChatbotWorkspace({ onExit }) {
       validationNote: 'Procesando documento'
     });
 
-    dispatch({ type: 'ADD_MESSAGE', message: createAssistantMessage(`Recibí ${targetDocument.label}. Lo estoy procesando ahora mismo.`) });
+    dispatch({
+      type: 'ADD_MESSAGE',
+      message: createAttachmentMessage(targetDocument.label, fileMetas)
+    });
+
+    dispatch({ type: 'ADD_MESSAGE', message: createAssistantMessage(`Ya recibí ${targetDocument.label}. Lo estoy revisando ahora mismo.`) });
 
     if (uploadTimersRef.current[documentId]) clearTimeout(uploadTimersRef.current[documentId]);
     uploadTimersRef.current[documentId] = window.setTimeout(() => {
-      const finalStatus =
-        state.scenario === 'review' && state.flow === 'reembolso' && documentId === 'informe'
-          ? 'requires_review'
-          : 'validated';
+      const validationResult = getDocumentValidationResult(state.flow, documentId, state.scenario);
       dispatch({
         type: 'SET_DOCUMENT_STATUS',
         documentId,
-        status: finalStatus,
-        validationNote: finalStatus === 'validated' ? 'Documento validado automáticamente' : 'Nombre con diferencia detectada'
+        status: validationResult.status,
+        validationNote: validationResult.validationNote
+      });
+      dispatch({
+        type: 'ADD_MESSAGE',
+        message: createAssistantMessage(
+          validationResult.status === 'validated'
+            ? `${targetDocument.label} se ve correcto.`
+            : validationResult.status === 'illegible'
+              ? `Detecté que ${targetDocument.label} no se lee con claridad. Te mostraré la observación al revisar los resultados.`
+              : `Detecté una observación en ${targetDocument.label}. La revisaremos juntos al terminar.`
+        )
       });
       delete uploadTimersRef.current[documentId];
     }, 1200);
@@ -1124,24 +1482,14 @@ export default function ChatbotWorkspace({ onExit }) {
   const handleDocumentContinue = () => {
     const hasFiles = state.documents.some((document) => document.files.length > 0);
     if (!hasFiles) {
-      dispatch({ type: 'ADD_MESSAGE', message: createAssistantMessage('No hay documentos cargados todavía. Podemos continuar con la información y volver después si lo necesitas.') });
-      dispatch({ type: 'SET_STAGE', value: 'information-policy' });
+      enterInformationReview('Todavía no veo documentos cargados. Podemos revisar la información del trámite y volver a los archivos después.');
       return;
     }
 
-    dispatch({ type: 'ADD_MESSAGE', message: createAssistantMessage('Perfecto. Ahora voy a validar lo que ya cargaste.') });
+    dispatch({ type: 'ADD_MESSAGE', message: createAssistantMessage('Perfecto, voy a validar lo que ya cargaste.') });
     dispatch({ type: 'SET_STAGE', value: 'validation-processing' });
     dispatch({ type: 'SET_VALIDATION_PHASE', value: 'processing' });
     dispatch({ type: 'SET_VALIDATION_STAGE_INDEX', value: 0 });
-  };
-
-  const handleInfoSave = (nextStage) => {
-    dispatch({ type: 'SET_STAGE', value: nextStage });
-  };
-
-  const handleClaimContinue = () => {
-    if (!canContinueClaim) return;
-    dispatch({ type: 'SET_STAGE', value: 'review' });
   };
 
   const handleReviewEdit = (section) => {
@@ -1150,19 +1498,19 @@ export default function ChatbotWorkspace({ onExit }) {
       return;
     }
     if (section === 'information-policy') {
-      dispatch({ type: 'SET_STAGE', value: 'information-policy' });
+      enterInformationReview('Claro, revisemos nuevamente la información del trámite.');
       return;
     }
     if (section === 'information-requester') {
-      dispatch({ type: 'SET_STAGE', value: 'information-requester' });
+      enterInformationReview('Claro, revisemos nuevamente los datos de quien realiza el trámite.');
       return;
     }
     if (section === 'information-contact') {
-      dispatch({ type: 'SET_STAGE', value: 'information-contact' });
+      enterInformationReview('Claro, revisemos nuevamente tus datos de contacto.');
       return;
     }
     if (section === 'claim') {
-      dispatch({ type: 'SET_STAGE', value: 'claim' });
+      enterClaimReview('Claro, revisemos nuevamente los datos de la reclamación.');
       return;
     }
     if (section === 'validation-results') {
@@ -1172,11 +1520,11 @@ export default function ChatbotWorkspace({ onExit }) {
 
   const handleConfirmSend = () => {
     dispatch({ type: 'SET_STAGE', value: 'submitting' });
-    dispatch({ type: 'ADD_MESSAGE', message: createAssistantMessage('Estoy enviando tu trámite de forma simulada. Esto solo toma un momento.') });
+    dispatch({ type: 'ADD_MESSAGE', message: createAssistantMessage('Estoy preparando el envío de tu trámite. Esto solo toma un momento.') });
     window.setTimeout(() => {
       dispatch({ type: 'SET_STAGE', value: 'success' });
       dispatch({ type: 'SET_REVIEW_CONFIRMED', value: true });
-      dispatch({ type: 'ADD_MESSAGE', message: createAssistantMessage('Tu solicitud fue recibida correctamente.') });
+      dispatch({ type: 'ADD_MESSAGE', message: createAssistantMessage('Listo, tu solicitud quedó recibida correctamente.') });
     }, 1200);
   };
 
@@ -1187,40 +1535,102 @@ export default function ChatbotWorkspace({ onExit }) {
     dispatch({ type: 'ADD_MESSAGE', message: createUserMessage(text) });
     dispatch({ type: 'SET_DRAFT', value: '' });
 
+    if (isInformationStage(state.stage)) {
+      handleInformationInput(text);
+      return;
+    }
+
+    if (state.stage === 'claim') {
+      handleClaimInput(text);
+      return;
+    }
+
     const normalized = text.toLowerCase();
     if (/reembolso|devoluci[oó]n|factura|gastos/.test(normalized)) {
       dispatch({ type: 'SET_STAGE', value: 'flow-intro' });
       dispatch({ type: 'SET_ENTRY_MODE', value: 'start' });
-      dispatch({ type: 'SET_FLOW', flow: 'reembolso', scenario: 'blank' });
-      dispatch({ type: 'ADD_MESSAGE', message: createAssistantMessage('Perfecto, vamos a preparar una solicitud de Reembolso.') });
+      dispatch({ type: 'SET_FLOW', flow: 'reembolso', scenario: 'mixed' });
       return;
     }
 
     if (/cirug|operaci[oó]n|autorizaci[oó]n/.test(normalized)) {
       dispatch({ type: 'SET_STAGE', value: 'flow-intro' });
       dispatch({ type: 'SET_ENTRY_MODE', value: 'start' });
-      dispatch({ type: 'SET_FLOW', flow: 'cirugia_programada', scenario: 'flow' });
-      dispatch({ type: 'ADD_MESSAGE', message: createAssistantMessage('Perfecto, te ayudaré con Cirugía Programada.') });
+      dispatch({ type: 'SET_FLOW', flow: 'cirugia_programada', scenario: 'mixed' });
       return;
     }
 
     if (/requisit|document|formato/.test(normalized)) {
       dispatch({ type: 'SET_STAGE', value: 'flow-intro' });
       dispatch({ type: 'SET_ENTRY_MODE', value: 'info' });
-      dispatch({ type: 'ADD_MESSAGE', message: createAssistantMessage('Claro. Indícame si quieres información de Reembolso o Cirugía Programada.') });
       return;
     }
 
     if (/estatus/.test(normalized)) {
       dispatch({ type: 'SET_STAGE', value: 'out-of-scope' });
-      dispatch({ type: 'ADD_MESSAGE', message: createAssistantMessage('Todavía no tengo una consulta de estatus funcional en esta versión del chatbot. Puedo orientarte con un trámite o mostrarte ayuda externa.') });
       return;
     }
 
-    dispatch({ type: 'ADD_MESSAGE', message: createAssistantMessage('Puedo ayudarte a iniciar Reembolso, Cirugía Programada o mostrarte requisitos. Selecciona una opción rápida si prefieres.') });
+    dispatch({ type: 'SET_STAGE', value: 'flow-intro' });
+    dispatch({ type: 'SET_ENTRY_MODE', value: 'info' });
   };
 
   const handleComposerSuggestion = (item) => {
+    if (item.claimField && item.value) {
+      handleClaimInput(item.value, true);
+      return;
+    }
+
+    if (item.id === 'info-confirm') {
+      handleInformationInput('Sí, continuar', true);
+      return;
+    }
+
+    if (item.id === 'claim-confirm') {
+      handleClaimInput('Sí, continuar', true);
+      return;
+    }
+
+    const claimFieldBySuggestion = {
+      'claim-change-type': 'type',
+      'claim-change-knows': 'knowsSinisterNumber',
+      'claim-change-sinister': 'sinisterNumber',
+      'claim-change-attention': 'attentionPlace',
+      'claim-change-tramite': 'tramiteType',
+      'claim-change-observations': 'observations',
+      'claim-change-currency': 'currency',
+      'claim-change-amount': 'claimedAmount',
+      'claim-change-receipts': 'receiptsCount'
+    };
+
+    if (claimFieldBySuggestion[item.id]) {
+      const field = claimFieldBySuggestion[item.id];
+      dispatch({ type: 'ADD_MESSAGE', message: createUserMessage(item.label) });
+      dispatch({ type: 'SET_CLAIM_CORRECTION_FIELD', value: field });
+      dispatch({ type: 'ADD_MESSAGE', message: createAssistantMessage(getClaimFieldPrompt(field)) });
+      return;
+    }
+
+    const informationFieldBySuggestion = {
+      'info-change-name': 'fullName',
+      'info-change-email': 'email',
+      'info-change-phone': 'mobilePhone',
+      'info-change-policy': 'policyNumber'
+    };
+
+    if (informationFieldBySuggestion[item.id]) {
+      const field = informationFieldBySuggestion[item.id];
+      dispatch({ type: 'ADD_MESSAGE', message: createUserMessage(item.label) });
+      dispatch({ type: 'SET_INFORMATION_CORRECTION_FIELD', value: field });
+      dispatch({ type: 'ADD_MESSAGE', message: createAssistantMessage(getInformationFieldPrompt(field)) });
+      return;
+    }
+
+    if (item.id === 'reembolso' || item.id === 'cirugia_programada') {
+      handleFlowSelect(item.id, 'start');
+      return;
+    }
+
     handleIntent(item.id);
   };
 
@@ -1234,34 +1644,40 @@ export default function ChatbotWorkspace({ onExit }) {
 
   const renderStageContent = () => {
     if (isWelcomeEmpty) {
+      const starterQuickReplies = [
+        { id: 'reembolso', label: 'Reembolso' },
+        { id: 'cirugia_programada', label: 'Cirugía Programada' }
+      ];
+
       return (
         <section className="flex min-h-[calc(100vh-260px)] flex-col items-center justify-center px-4 py-10 sm:px-6 lg:px-8">
-          <div className="w-full max-w-[820px] text-center">
-            <h2 className="mx-auto max-w-4xl text-[clamp(2.6rem,4vw,3.9rem)] font-semibold leading-[1.06] tracking-[-0.04em] text-[#181C1E]">
-              ¿Cómo puedo ayudarte hoy?
+          <div className="w-full max-w-[860px] text-center">
+            <span className="inline-flex items-center rounded-full border border-[#DDE5EF] bg-white px-4 py-1.5 text-xs font-bold uppercase tracking-[0.24em] text-[#006494] shadow-sm">
+              Asistente virtual
+            </span>
+            <h2 className="mx-auto mt-5 max-w-4xl text-[clamp(2.2rem,3.6vw,3.5rem)] font-semibold leading-[1.08] tracking-[-0.04em] text-[#181C1E]">
+              ¿En qué puedo ayudarte hoy?
             </h2>
-            <p className="mx-auto mt-5 max-w-[680px] text-[clamp(1rem,1.2vw,1.125rem)] leading-7 text-[#434751]">
-              Puedo orientarte sobre reembolsos, cirugía programada, documentos y el estatus de tu trámite.
+            <p className="mx-auto mt-4 max-w-[700px] text-[clamp(1rem,1.2vw,1.125rem)] leading-7 text-[#434751]">
+              Puedo orientarte sobre Reembolso, Cirugía Programada, documentos y el estado de tu trámite.
             </p>
           </div>
 
-          <div className="mt-10 w-full">
-            <div className="mx-auto w-full max-w-[760px]">
-              <ChatComposer
-                value={state.draft}
-                onChange={(value) => dispatch({ type: 'SET_DRAFT', value })}
-                onSend={handleComposerSend}
-                onAttach={(files) => {
-                  if (!state.flow) return;
-                  const targetDocument = state.documents.find((document) => document.status === 'pending') ?? state.documents[0];
-                  if (targetDocument) handleDocumentUpload(targetDocument.id, files);
-                }}
-                placeholder="Pregunta a Allianz México"
-                suggestions={chatbotQuickActions}
-                onSuggestion={handleComposerSuggestion}
-                variant="hero"
-              />
-            </div>
+          <div className="mt-8 w-full max-w-[760px]">
+            <ChatComposer
+              value={state.draft}
+              onChange={(value) => dispatch({ type: 'SET_DRAFT', value })}
+              onSend={handleComposerSend}
+              onAttach={(files) => {
+                if (!state.flow) return;
+                const targetDocument = state.documents.find((document) => document.status === 'pending') ?? state.documents[0];
+                if (targetDocument) handleDocumentUpload(targetDocument.id, files);
+              }}
+              placeholder="Pregunta a Allianz México"
+              suggestions={starterQuickReplies}
+              onSuggestion={handleComposerSuggestion}
+              variant="hero"
+            />
           </div>
         </section>
       );
@@ -1274,17 +1690,15 @@ export default function ChatbotWorkspace({ onExit }) {
             flow={state.flow}
             entryMode={state.entryMode}
             onFlowSelect={(flow) => {
-              dispatch({ type: 'ADD_MESSAGE', message: createUserMessage(flowLabels[flow]) });
-              dispatch({ type: 'SET_FLOW', flow, scenario: flow === 'cirugia_programada' ? 'flow' : 'blank' });
-              dispatch({ type: 'ADD_MESSAGE', message: createAssistantMessage(`Perfecto. Ya tengo seleccionada la ruta de ${flowLabels[flow]}.`) });
+              handleFlowSelect(flow, state.entryMode === 'info' ? 'info' : 'start');
             }}
             onContinue={() => handleGuideContinue(state.entryMode === 'info' ? 'start-now' : 'documents')}
             onInfoOnly={() => handleGuideContinue('info-only')}
             onOtherFlow={() => handleGuideContinue('another-tramite')}
             onFormats={() => {
+              persistFlowGuideTrace();
               dispatch({ type: 'SET_STAGE', value: 'formats' });
               dispatch({ type: 'ADD_MESSAGE', message: createUserMessage('Descargar formatos') });
-              dispatch({ type: 'ADD_MESSAGE', message: createAssistantMessage('Te muestro la biblioteca de formatos simulados para este trámite.') });
             }}
           />
         </section>
@@ -1294,6 +1708,7 @@ export default function ChatbotWorkspace({ onExit }) {
     if (state.stage === 'formats') {
       return (
         <section className="space-y-4">
+          <AssistantCue text="Aquí tienes los formatos disponibles. Descarga uno o todos y luego seguimos cuando tú quieras." />
           <FormatLibraryCard
             flow={state.flow}
             onDownload={handleDownload}
@@ -1309,25 +1724,25 @@ export default function ChatbotWorkspace({ onExit }) {
           <div className="rounded-[24px] border border-[#E0E6ED] bg-white p-5 shadow-sm sm:p-6">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
-                <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-[#006494]">Carga documental</p>
+                <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-[#006494]">Documentos</p>
                 <h3 className="mt-2 text-[22px] font-semibold leading-7 text-[#181C1E]">
-                  {state.flow ? flowLabels[state.flow] : 'Documentos del trámite'}
+                  {state.flow ? `Vamos con ${flowLabels[state.flow]}` : 'Documentos del trámite'}
                 </h3>
                 <p className="mt-2 max-w-3xl text-sm leading-6 text-[#434751]">
                   {state.flow
-                    ? 'Adjunta los documentos que te solicite cada tarjeta. Puedes continuar con la información cuando lo necesites.'
+                    ? 'Te iré pidiendo cada archivo en un orden sencillo para que no tengas que pensar demasiado.'
                     : 'Selecciona un trámite para mostrar los documentos correspondientes.'}
                 </p>
               </div>
               <div className="rounded-full bg-[#EFF6FF] px-4 py-2 text-sm font-semibold text-[#003781]">
-                {summary.processed} documentos cargados
+                {summary.processed} cargados
               </div>
             </div>
 
             {state.flow ? (
               <>
                 <div className="mt-5 rounded-[22px] border border-[#E0E6ED] bg-[#F7FAFC] p-4">
-                  <p className="text-sm font-semibold text-[#181C1E]">Documentos requeridos</p>
+                  <p className="text-sm font-semibold text-[#181C1E]">Documentos para empezar</p>
                   <div className="mt-3 flex flex-wrap gap-2">
                     {visibleFlowDocuments.map((document) => (
                       <span
@@ -1361,8 +1776,7 @@ export default function ChatbotWorkspace({ onExit }) {
                     className="focus-ring inline-flex items-center justify-center rounded-full border border-[#DDE5EF] bg-white px-4 py-2.5 text-sm font-semibold text-[#434751] transition hover:bg-[#F7FAFC]"
                     onClick={() => {
                       dispatch({ type: 'ADD_MESSAGE', message: createUserMessage('Continuar sin documentos') });
-                      dispatch({ type: 'ADD_MESSAGE', message: createAssistantMessage('De acuerdo. Vamos a continuar con la información del trámite.') });
-                      dispatch({ type: 'SET_STAGE', value: 'information-policy' });
+                      enterInformationReview('De acuerdo. Revisemos la información que tengo del trámite.');
                     }}
                   >
                     Continuar sin documentos
@@ -1387,21 +1801,25 @@ export default function ChatbotWorkspace({ onExit }) {
     }
 
     if (state.stage === 'validation-processing') {
-      return <ValidationProcessingScreen stageIndex={state.validationStageIndex} progress={Math.max(12, (state.validationStageIndex + 1) * 20)} />;
+      return (
+        <div className="space-y-4">
+          <AssistantCue text="Déjame un momento, estoy revisando lo que cargaste." />
+          <ValidationProcessingScreen stageIndex={state.validationStageIndex} progress={Math.max(12, (state.validationStageIndex + 1) * 20)} />
+        </div>
+      );
     }
 
     if (state.stage === 'validation-results') {
       return (
         <div className="space-y-4">
-          <ValidationSummary summary={summary} />
+          <AssistantCue text="Ya terminé la revisión. Te muestro lo más importante para que decidas si quieres corregir algo." />
           <ValidationResultsPanel
             summary={summary}
             correctDocuments={validatedDocuments}
             reviewDocuments={reviewDocuments}
             alerts={activeAlerts}
             onResolveAlert={(alert) => {
-              dispatch({ type: 'ADD_MESSAGE', message: createAssistantMessage(`Voy a llevarte al punto del flujo relacionado con: ${alert.field}.`) });
-              dispatch({ type: 'SET_STAGE', value: 'information-policy' });
+              enterInformationReview(`Revisemos el dato relacionado con ${alert.field}. Puedes escribir la corrección en el chat.`);
             }}
             onEditDocument={(document) => {
               dispatch({ type: 'SET_ACTIVE_DOCUMENT', value: document.id });
@@ -1413,13 +1831,17 @@ export default function ChatbotWorkspace({ onExit }) {
             <button
               type="button"
               className="focus-ring inline-flex items-center justify-center rounded-full bg-[#003781] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#002356]"
-              onClick={() => dispatch({ type: 'SET_STAGE', value: 'information-policy' })}
+              onClick={() => enterInformationReview()}
             >
               Continuar
             </button>
           </div>
         </div>
       );
+    }
+
+    if (isInformationStage(state.stage)) {
+      return null;
     }
 
     if (state.stage === 'information-policy') {
@@ -1429,6 +1851,7 @@ export default function ChatbotWorkspace({ onExit }) {
           description="Mantén a la vista los datos principales del contrato. Los valores detectados siguen siendo editables."
           icon={<SparkIcon className="h-5 w-5" />}
         >
+          <AssistantCue text="Vamos con tus datos de póliza. Si algo no coincide, lo puedes ajustar aquí mismo." />
           <InlineFormGrid columns="lg:grid-cols-2">
             <div>
               <div className="mb-2 flex items-center justify-between gap-3">
@@ -1470,6 +1893,7 @@ export default function ChatbotWorkspace({ onExit }) {
           description="Selecciona quién solicita el trámite y reutiliza la información detectada cuando corresponda."
           icon={<SparkIcon className="h-5 w-5" />}
         >
+          <AssistantCue text="Ahora necesito saber quién realiza el trámite. Lo hacemos juntos en un momento." />
           <div className="space-y-4">
             <div>
               <p className="mb-2 text-sm font-semibold uppercase tracking-[0.12em] text-[#181C1E]">
@@ -1545,6 +1969,7 @@ export default function ChatbotWorkspace({ onExit }) {
           description="Completa los medios de contacto para continuar con la preparación del trámite."
           icon={<SparkIcon className="h-5 w-5" />}
         >
+          <AssistantCue text="Perfecto. Solo me faltan tus datos de contacto para continuar." />
           <InlineFormGrid columns="lg:grid-cols-2">
             <FormField
               label="Teléfono particular"
@@ -1581,8 +2006,7 @@ export default function ChatbotWorkspace({ onExit }) {
               }`}
               disabled={!canContinueInfo}
               onClick={() => {
-                dispatch({ type: 'ADD_MESSAGE', message: createAssistantMessage('Perfecto. Ahora podemos pasar a la información de la reclamación.') });
-                dispatch({ type: 'SET_STAGE', value: 'claim' });
+                enterClaimReview('Ahora continuemos con los datos de la reclamación. Puedes corregir cualquier dato escribiéndolo aquí mismo.');
               }}
             >
               Guardar y continuar
@@ -1593,161 +2017,13 @@ export default function ChatbotWorkspace({ onExit }) {
     }
 
     if (state.stage === 'claim') {
-      return (
-        <InfoSectionCard
-          title="Información de la reclamación"
-          description="Los datos precargados siguen siendo editables y se usan para preparar la siguiente etapa."
-          icon={<PaymentsIcon className="h-5 w-5" />}
-        >
-          <div className="space-y-5">
-            <div>
-              <p className="mb-2 text-sm font-semibold uppercase tracking-[0.12em] text-[#181C1E]">Tipo de reclamación</p>
-              <div className="flex flex-wrap gap-2">
-                <ToggleChoice
-                  value="Inicial"
-                  selected={state.claimant.type === 'Inicial'}
-                  onSelect={() => {
-                    dispatch({ type: 'SET_CLAIMANT_FIELD', field: 'type', value: 'Inicial' });
-                    dispatch({ type: 'SET_CLAIMANT_FIELD', field: 'knowsSinisterNumber', value: 'No' });
-                    dispatch({ type: 'SET_CLAIMANT_FIELD', field: 'sinisterNumber', value: '' });
-                  }}
-                />
-                <ToggleChoice
-                  value="Complemento"
-                  selected={state.claimant.type === 'Complemento'}
-                  onSelect={() => dispatch({ type: 'SET_CLAIMANT_FIELD', field: 'type', value: 'Complemento' })}
-                />
-              </div>
-            </div>
-
-            {state.claimant.type === 'Complemento' ? (
-              <div className="space-y-3 rounded-[22px] border border-[#E0E6ED] bg-[#F7FAFC] p-4">
-                <p className="text-sm font-semibold text-[#181C1E]">¿Conoces el número de siniestro?</p>
-                <div className="flex flex-wrap gap-2">
-                  <ToggleChoice
-                    value="Sí"
-                    selected={state.claimant.knowsSinisterNumber === 'Sí'}
-                    onSelect={() => dispatch({ type: 'SET_CLAIMANT_FIELD', field: 'knowsSinisterNumber', value: 'Sí' })}
-                  />
-                  <ToggleChoice
-                    value="No"
-                    selected={state.claimant.knowsSinisterNumber === 'No'}
-                    onSelect={() => {
-                      dispatch({ type: 'SET_CLAIMANT_FIELD', field: 'knowsSinisterNumber', value: 'No' });
-                      dispatch({ type: 'SET_CLAIMANT_FIELD', field: 'sinisterNumber', value: '' });
-                    }}
-                  />
-                </div>
-                {state.claimant.knowsSinisterNumber === 'Sí' ? (
-                  <FormField
-                    label="Número de siniestro"
-                    value={state.claimant.sinisterNumber}
-                    onChange={(value) => dispatch({ type: 'SET_CLAIMANT_FIELD', field: 'sinisterNumber', value })}
-                    error={claimErrors.sinisterNumber}
-                  />
-                ) : null}
-              </div>
-            ) : null}
-
-            {state.flow === 'cirugia_programada' ? (
-              <>
-                <div>
-                  <p className="mb-2 text-sm font-semibold uppercase tracking-[0.12em] text-[#181C1E]">Lugar de atención</p>
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    {['Trámite Nacional', 'Trámite Internacional'].map((option) => (
-                      <ToggleChoice
-                        key={option}
-                        value={option}
-                        selected={state.claimant.attentionPlace === option}
-                        onSelect={() => dispatch({ type: 'SET_CLAIMANT_FIELD', field: 'attentionPlace', value: option })}
-                      />
-                    ))}
-                  </div>
-                  {claimErrors.attentionPlace ? <p className="mt-2 text-xs font-semibold text-[#D93025]">{claimErrors.attentionPlace}</p> : null}
-                </div>
-
-                <div>
-                  <label className="block">
-                    <span className="mb-2 block text-sm font-semibold uppercase tracking-[0.12em] text-[#181C1E]">Tipo de trámite</span>
-                    <select
-                      className="focus-ring w-full rounded-2xl border border-[#DDE5EF] bg-white px-4 py-3 text-sm text-[#181C1E]"
-                      value={state.claimant.tramiteType}
-                      onChange={(event) => dispatch({ type: 'SET_CLAIMANT_FIELD', field: 'tramiteType', value: event.target.value })}
-                    >
-                      <option value="">--Seleccione una opción--</option>
-                      <option value="Cirugía">Cirugía</option>
-                      <option value="Medicamentos">Medicamentos</option>
-                      <option value="Estudios">Estudios</option>
-                      <option value="Rehabilitación">Rehabilitación</option>
-                      <option value="Enfermería y Home Care">Enfermería y Home Care</option>
-                      <option value="Otros">Otros</option>
-                    </select>
-                  </label>
-                  {claimErrors.tramiteType ? <p className="mt-2 text-xs font-semibold text-[#D93025]">{claimErrors.tramiteType}</p> : null}
-                </div>
-
-                {state.claimant.tramiteType === 'Otros' ? (
-                  <FormField
-                    label="Observaciones"
-                    value={state.claimant.observations}
-                    onChange={(value) => dispatch({ type: 'SET_CLAIMANT_FIELD', field: 'observations', value })}
-                    error={claimErrors.observations}
-                    helperText="Este campo es obligatorio cuando seleccionas Otros."
-                  />
-                ) : null}
-              </>
-            ) : (
-              <>
-                <InlineFormGrid columns="lg:grid-cols-3">
-                  <label className="block">
-                    <span className="mb-2 block text-sm font-semibold uppercase tracking-[0.12em] text-[#181C1E]">Moneda</span>
-                    <select
-                      className="focus-ring w-full rounded-2xl border border-[#DDE5EF] bg-white px-4 py-3 text-sm text-[#181C1E]"
-                      value={state.claimant.currency}
-                      onChange={(event) => dispatch({ type: 'SET_CLAIMANT_FIELD', field: 'currency', value: event.target.value })}
-                    >
-                      <option value="Pesos">Pesos</option>
-                      <option value="Dólares">Dólares</option>
-                      <option value="Euros">Euros</option>
-                      <option value="Otros">Otros</option>
-                    </select>
-                  </label>
-                  <FormField
-                    label="Monto reclamado"
-                    value={state.claimant.claimedAmount}
-                    onChange={(value) => dispatch({ type: 'SET_CLAIMANT_FIELD', field: 'claimedAmount', value })}
-                    helperText="Puedes corregir el monto si el valor detectado no es correcto."
-                  />
-                  <FormField
-                    label="Cantidad de recibos o facturas"
-                    value={state.claimant.receiptsCount}
-                    onChange={(value) => dispatch({ type: 'SET_CLAIMANT_FIELD', field: 'receiptsCount', value })}
-                    helperText="Número total de comprobantes a reembolsar."
-                  />
-                </InlineFormGrid>
-              </>
-            )}
-          </div>
-
-          <div className="mt-5 flex justify-end">
-            <button
-              type="button"
-              className={`focus-ring inline-flex items-center justify-center rounded-full px-4 py-2.5 text-sm font-semibold transition ${
-                canContinueClaim ? 'bg-[#003781] text-white hover:bg-[#002356]' : 'cursor-not-allowed bg-[#E9EEF5] text-[#8B94A3]'
-              }`}
-              disabled={!canContinueClaim}
-              onClick={handleClaimContinue}
-            >
-              Guardar y continuar
-            </button>
-          </div>
-        </InfoSectionCard>
-      );
+      return null;
     }
 
     if (state.stage === 'review') {
       return (
         <div className="space-y-4">
+          <AssistantCue text="Ya casi terminamos. Revisemos juntos el resumen antes de enviarlo." />
           <ValidationSummary summary={summary} />
           <ReviewSummaryCard
             flow={state.flow}
@@ -1772,8 +2048,8 @@ export default function ChatbotWorkspace({ onExit }) {
             </div>
             <div>
               <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-[#006494]">Envío en progreso</p>
-              <h3 className="mt-1 text-[22px] font-semibold leading-7 text-[#181C1E]">Estamos enviando tu trámite</h3>
-              <p className="mt-2 text-sm leading-6 text-[#434751]">Procesamos la solicitud de forma simulada antes de mostrar la confirmación final.</p>
+              <h3 className="mt-1 text-[22px] font-semibold leading-7 text-[#181C1E]">Estoy preparando el envío</h3>
+              <p className="mt-2 text-sm leading-6 text-[#434751]">En un momento verás la confirmación final.</p>
             </div>
           </div>
         </section>
@@ -1797,9 +2073,9 @@ export default function ChatbotWorkspace({ onExit }) {
         collapsed={state.sidebarCollapsed}
         onToggleCollapsed={() => dispatch({ type: 'SET_SIDEBAR_COLLAPSED', value: !state.sidebarCollapsed })}
         activePresetId={state.presetId}
-        onSelectPreset={(presetId) => resetConversation(presetId)}
         onNewConversation={() => resetConversation('welcome')}
         onGoHome={() => resetConversation('welcome')}
+        onHelp={() => handleIntent('help')}
       />
 
       <section className="flex min-w-0 flex-1 flex-col bg-[#F7FAFC]">
@@ -1813,9 +2089,33 @@ export default function ChatbotWorkspace({ onExit }) {
           <div className="flex min-w-0 flex-1 flex-col">
             <div ref={threadRef} className="min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-6 lg:px-8">
               <div className="mx-auto flex w-full max-w-[980px] flex-col gap-4">
-                {state.messages.map((message) => (
-                  <ChatMessage key={message.id} role={message.role} text={message.text} timeLabel={message.timeLabel} />
-                ))}
+                {state.messages.map((message) =>
+                  message.type === 'claim-summary' ? (
+                    <ClaimSummaryMessage key={message.id} message={message} />
+                  ) : message.type === 'information-summary' ? (
+                    <InformationSummaryMessage key={message.id} message={message} />
+                  ) : message.type === 'document-attachment' ? (
+                    <ChatMessage key={message.id} role="user" timeLabel={message.timeLabel}>
+                      <div className="min-w-[220px]">
+                        <p className="mb-2 text-[13px] font-semibold text-[#1B2C5B]">Documento adjunto</p>
+                        <p className="mb-2 text-[12px] text-[#536887]">{message.documentLabel}</p>
+                        <div className="space-y-2">
+                          {message.files.map((file) => (
+                            <div key={file.id} className="flex items-center gap-2 rounded-xl border border-[#D4E0F2] bg-white/70 px-3 py-2">
+                              <PaperclipIcon className="h-4 w-4 shrink-0 text-[#003781]" />
+                              <div className="min-w-0">
+                                <p className="truncate text-[13px] font-semibold text-[#1B2C5B]">{file.name}</p>
+                                <p className="text-[11px] text-[#6B7280]">{file.size} · {String(file.type || '').split('/').pop()?.toUpperCase() || 'Archivo'}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </ChatMessage>
+                  ) : (
+                    <ChatMessage key={message.id} role={message.role} text={message.text} timeLabel={message.timeLabel} />
+                  )
+                )}
 
                 {renderStageContent()}
 
@@ -1859,7 +2159,13 @@ export default function ChatbotWorkspace({ onExit }) {
                   if (targetDocument) handleDocumentUpload(targetDocument.id, files);
                 }}
                 placeholder="Escribe tu mensaje o selecciona una opción"
-                suggestions={chatbotQuickActions}
+                suggestions={
+                  state.stage === 'claim'
+                    ? getClaimQuickReplies(state.flow, state.claimCorrectionField)
+                    : isInformationStage(state.stage)
+                      ? informationQuickReplies
+                      : chatbotQuickActions
+                }
                 onSuggestion={handleComposerSuggestion}
               />
             ) : null}

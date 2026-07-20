@@ -6,18 +6,18 @@ export default function ValidationProcessingScreen({ stageIndex, progress }) {
     <section className="mx-auto w-full max-w-[980px] rounded-[20px] border border-[#E0E6ED] bg-white p-5 shadow-sm sm:p-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <p className="text-xs font-bold uppercase tracking-[0.24em] text-[#006494]">Validación inteligente</p>
+          <p className="text-xs font-bold uppercase tracking-[0.24em] text-[#006494]">Validación</p>
           <h2 className="mt-1 text-[22px] font-semibold leading-7 text-[#181C1E] sm:text-[28px]">
-            Estamos validando tus documentos
+            Estoy revisando tus documentos
           </h2>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-[#434751]">
-            Analizamos la información cargada para identificar coincidencias, diferencias y observaciones antes de continuar.
+            Dame un momento mientras verifico lo que cargaste y preparo el siguiente paso.
           </p>
         </div>
 
         <div className="inline-flex items-center gap-2 rounded-full bg-[#EFF6FF] px-4 py-2 text-sm font-semibold text-[#003781]">
           <SparkIcon className="h-4 w-4 animate-pulse" />
-          Análisis automático activo
+          Revisando ahora
         </div>
       </div>
 

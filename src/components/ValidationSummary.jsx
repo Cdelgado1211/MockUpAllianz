@@ -21,10 +21,10 @@ export default function ValidationSummary({ summary }) {
     <section className="mx-auto w-full max-w-[980px] rounded-[20px] border border-[#E0E6ED] bg-white p-5 shadow-sm sm:p-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="text-xs font-bold uppercase tracking-[0.24em] text-[#006494]">Resumen del proceso</p>
-          <h2 className="mt-1 text-[22px] font-semibold leading-7 text-[#181C1E] sm:text-[26px]">Validación inteligente</h2>
+          <p className="text-xs font-bold uppercase tracking-[0.24em] text-[#006494]">Resumen</p>
+          <h2 className="mt-1 text-[22px] font-semibold leading-7 text-[#181C1E] sm:text-[26px]">Ya revisé tus documentos</h2>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-[#434751]">
-            Revisa el resultado del análisis antes de continuar. <span className="block">Los conteos se generan a partir del estado real de tus documentos.</span>
+            Aquí tienes lo más importante para decidir si continúas o corriges algo.
           </p>
         </div>
         <div className="inline-flex items-center rounded-full bg-[#EFF6FF] px-4 py-2 text-sm font-semibold text-[#003781]">

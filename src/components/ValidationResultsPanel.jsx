@@ -52,9 +52,9 @@ export default function ValidationResultsPanel({
 
       {alerts.length > 0 ? (
         <SectionCard
-          eyebrow="Sistema de alertas"
-          title="Alertas detectadas"
-          description="Revisa las diferencias encontradas. Puedes corregir datos, reemplazar documentos o continuar si la validación del trámite lo permite."
+          eyebrow="Lo que encontré"
+          title="Hay algunos puntos para revisar"
+          description="Te muestro solo lo importante para que podamos corregirlo o continuar."
           tone="amber"
           maxWidth="max-w-[980px]"
         >
@@ -72,9 +72,9 @@ export default function ValidationResultsPanel({
       ) : null}
 
       <SectionCard
-        eyebrow="Resultados de validación"
+        eyebrow="Lo que está en orden"
         title="Documentos correctos"
-        description="Documentos que el sistema validó automáticamente sin inconsistencias."
+        description="Estos documentos quedaron listos y no requieren cambios por ahora."
         tone="green"
         maxWidth="max-w-[980px]"
       >
@@ -98,9 +98,9 @@ export default function ValidationResultsPanel({
       </SectionCard>
 
       <SectionCard
-        eyebrow="Observaciones"
+        eyebrow="Atención"
         title="Documentos que requieren revisión"
-        description="Estos documentos necesitan atención antes de continuar o aceptar las observaciones encontradas."
+        description="Aquí están los archivos que necesitan una corrección antes de seguir."
         tone="amber"
         maxWidth="max-w-[980px]"
       >
