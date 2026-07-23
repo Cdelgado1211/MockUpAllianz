@@ -4,6 +4,9 @@ import ChatContextPanel from './ChatContextPanel';
 import ChatHeader from './ChatHeader';
 import ChatMessage from './ChatMessage';
 import ChatSidebar from './ChatSidebar';
+import FormDocumentSelector from './FormDocumentSelector';
+import FormGeneratedDocumentMessage from './FormGeneratedDocumentMessage';
+import FormSummaryMessage from './FormSummaryMessage';
 import ClaimSummaryMessage from './ClaimSummaryMessage';
 import InformationSummaryMessage from './InformationSummaryMessage';
 import ConfirmationModal from './ConfirmationModal';
@@ -26,6 +29,23 @@ import {
   getChatbotProgressIndex
 } from '../data/mockChatbot';
 import { createMockFileMeta, formatBytes } from '../data/mockReembolso';
+import { generateMockPdf } from '../utils/generateMockPdf';
+import {
+  createFormDraft,
+  buildGeneratedDocumentMeta,
+  createFormSnapshot,
+  findFormFieldByText,
+  formComposerInterruptions,
+  formDocumentSelectionOptions,
+  formReviewOptions,
+  getDocumentDefinition,
+  getFormFieldById,
+  getFormFieldLabel,
+  getFormFieldPrompt,
+  getNextFormField,
+  getPreviousFormField,
+  validateFormField
+} from '../data/chatbotDocumentCompletion';
 import {
   applyInformationCorrection,
   buildInformationSnapshot,
@@ -155,6 +175,55 @@ function createClaimSummaryMessage(source, text = 'Revisa los datos de la reclam
   };
 }
 
+function createFormSelectorMessage() {
+  return {
+    id: `form-selector-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    role: 'assistant',
+    type: 'form-selector',
+    text: 'Claro. Puedo ayudarte a completar uno de los formularios necesarios para tu trámite. ¿Cuál deseas preparar?',
+    supportText: 'Selecciona una opción o escríbela en el chat.',
+    options: formDocumentSelectionOptions.map((option) => ({ ...option })),
+    timeLabel: getCurrentTimeLabel()
+  };
+}
+
+function createFormConversationSummaryMessage(documentDraft, text = 'Ya tengo la información necesaria. Revísala antes de continuar:') {
+  return {
+    id: `form-summary-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    role: 'assistant',
+    type: 'form-summary',
+    text,
+    snapshot: createFormSnapshot(documentDraft),
+    timeLabel: getCurrentTimeLabel()
+  };
+}
+
+function createFormGeneratedDocumentMessage(documentDraft, generatedDocument, text = 'Tu documento mock ya está listo para descargar:') {
+  return {
+    id: `form-generated-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    role: 'assistant',
+    type: 'form-generated-document',
+    text,
+    snapshot: createFormSnapshot(documentDraft),
+    fileName: generatedDocument.fileName,
+    downloadUrl: generatedDocument.url,
+    timeLabel: getCurrentTimeLabel()
+  };
+}
+
+function createInitialDocumentDraft(status = 'idle') {
+  return createFormDraft(status);
+}
+
+function buildGeneratedDocumentSections(snapshot) {
+  return [
+    {
+      title: snapshot.title,
+      fields: snapshot.fields.map((fieldItem) => ({ label: fieldItem.label, value: fieldItem.value }))
+    }
+  ];
+}
+
 function createStartingData() {
   const base = createChatbotPreset('welcome');
   return {
@@ -178,7 +247,8 @@ function createStartingData() {
     informationCorrectionField: null,
     informationConfirmed: false,
     claimCorrectionField: null,
-    claimConfirmed: false
+    claimConfirmed: false,
+    documentDraft: createInitialDocumentDraft()
   };
 }
 
@@ -215,7 +285,8 @@ function hydratePreset(presetId = 'welcome') {
     informationCorrectionField: null,
     informationConfirmed: false,
     claimCorrectionField: null,
-    claimConfirmed: false
+    claimConfirmed: false,
+    documentDraft: createInitialDocumentDraft()
   };
 }
 
@@ -720,11 +791,6 @@ function ReviewSummaryCard({
           <p className="mt-2 text-sm leading-6 text-[#434751]">
             <span className="font-semibold text-[#181C1E]">Relación:</span> {person.relationship || 'Pendiente'}
           </p>
-          {person.relationship === 'Otro' ? (
-            <p className="text-sm leading-6 text-[#434751]">
-              <span className="font-semibold text-[#181C1E]">Parentesco:</span> {person.parentesco || 'Pendiente'}
-            </p>
-          ) : null}
           <p className="text-sm leading-6 text-[#434751]">
             <span className="font-semibold text-[#181C1E]">Nombre:</span> {displayName || 'Pendiente'}
           </p>
@@ -977,6 +1043,8 @@ function chatbotReducer(state, action) {
       return { ...state, claimCorrectionField: action.value };
     case 'SET_CLAIM_CONFIRMED':
       return { ...state, claimConfirmed: action.value };
+    case 'SET_DOCUMENT_DRAFT':
+      return { ...state, documentDraft: action.value };
     case 'SET_DOCUMENT_FILES':
       return {
         ...state,
@@ -1056,6 +1124,7 @@ export default function ChatbotWorkspace({ onExit }) {
   const threadRef = useRef(null);
   const uploadTimersRef = useRef({});
   const validationTimersRef = useRef([]);
+  const generatedDocumentUrlsRef = useRef([]);
   const messageSeenRef = useRef(0);
 
   const progressIndex = useMemo(() => getProgressIndex(state.stage), [state.stage]);
@@ -1069,8 +1138,12 @@ export default function ChatbotWorkspace({ onExit }) {
   const visibleFlowDocuments = useMemo(() => (state.flow ? getChatbotFlowDocuments(state.flow) : []), [state.flow]);
   const claimErrors = useMemo(() => getClaimErrors(state.claimant, state.flow), [state.claimant, state.flow]);
   const contactErrors = useMemo(() => getContactErrors(state.contact), [state.contact]);
-  const canContinueInfo = !contactErrors.mobilePhone && !contactErrors.email && !contactErrors.emailConfirmation && !contactErrors.phoneLandline && !(state.person.relationship === 'Otro' && (!String(state.person.parentesco ?? '').trim() || !state.person.firstName.trim() || !state.person.paternalLastName.trim() || !state.person.maternalLastName.trim()));
+  const formDefinition = useMemo(() => getDocumentDefinition(state.documentDraft.documentType), [state.documentDraft.documentType]);
+  const currentFormField = useMemo(() => getNextFormField(state.documentDraft), [state.documentDraft]);
+  const previousFormField = useMemo(() => getPreviousFormField(state.documentDraft), [state.documentDraft]);
+  const canContinueInfo = !contactErrors.mobilePhone && !contactErrors.email && !contactErrors.emailConfirmation && !contactErrors.phoneLandline && !(state.person.relationship === 'Otro' && (!state.person.firstName.trim() || !state.person.paternalLastName.trim() || !state.person.maternalLastName.trim()));
   const canContinueClaim = !claimErrors.sinisterNumber && !claimErrors.attentionPlace && !claimErrors.tramiteType && !claimErrors.observations;
+  const isFormActive = state.documentDraft.status !== 'idle' && state.documentDraft.status !== 'confirmed' && state.documentDraft.status !== 'cancelled';
 
   const stageCopy = getStageCopy(state.stage, state.entryMode, state.flow);
   const isWelcomeEmpty = state.stage === 'welcome' && state.messages.length === 0 && !state.flow;
@@ -1084,6 +1157,8 @@ export default function ChatbotWorkspace({ onExit }) {
     return () => {
       Object.values(uploadTimersRef.current).forEach((timerId) => clearTimeout(timerId));
       validationTimersRef.current.forEach((timerId) => clearTimeout(timerId));
+      generatedDocumentUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+      generatedDocumentUrlsRef.current = [];
     };
   }, []);
 
@@ -1143,12 +1218,403 @@ export default function ChatbotWorkspace({ onExit }) {
     validationTimersRef.current = [];
     Object.values(uploadTimersRef.current).forEach((timerId) => clearTimeout(timerId));
     uploadTimersRef.current = {};
+    generatedDocumentUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+    generatedDocumentUrlsRef.current = [];
     dispatch({ type: 'RESET_PRESET', presetId });
   };
 
   const appendUserAndAssistant = (userText, assistantText) => {
     dispatch({ type: 'ADD_MESSAGE', message: createUserMessage(userText) });
     if (assistantText) dispatch({ type: 'ADD_MESSAGE', message: createAssistantMessage(assistantText) });
+  };
+
+  const updateDocumentDraft = (patch) => {
+    dispatch({
+      type: 'SET_DOCUMENT_DRAFT',
+      value: {
+        ...state.documentDraft,
+        ...patch
+      }
+    });
+  };
+
+  const resetDocumentDraft = (status = 'idle') => {
+    updateDocumentDraft(createInitialDocumentDraft(status));
+  };
+
+  const enterFormSelector = () => {
+    resetDocumentDraft('choosing_document');
+    dispatch({
+      type: 'ADD_MESSAGE',
+      message: createAssistantMessage('Claro. Puedo ayudarte a completar uno de los formularios necesarios para tu trámite. ¿Cuál deseas preparar?')
+    });
+    dispatch({ type: 'ADD_MESSAGE', message: createFormSelectorMessage() });
+  };
+
+  const getFormFollowUpPrompt = () => {
+    if (state.documentDraft.status === 'choosing_document') {
+      return 'Claro. ¿Cuál deseas preparar?';
+    }
+
+    if (state.documentDraft.status === 'reviewing') {
+      return '¿Confirmas que la información es correcta?';
+    }
+
+    if (state.documentDraft.status === 'editing' && state.documentDraft.editingFieldId) {
+      const editingField = getFormFieldById(state.documentDraft.documentType, state.documentDraft.editingFieldId);
+      return editingField ? getFormFieldPrompt(editingField) : '';
+    }
+
+    if (state.documentDraft.status === 'editing' && !state.documentDraft.editingFieldId) {
+      return '¿Qué dato quieres cambiar?';
+    }
+
+    return currentFormField ? getFormFieldPrompt(currentFormField) : '';
+  };
+
+  const cancelFormDraft = (userText = null) => {
+    if (userText) dispatch({ type: 'ADD_MESSAGE', message: createUserMessage(userText) });
+    dispatch({
+      type: 'ADD_MESSAGE',
+      message: createAssistantMessage('De acuerdo. Cancelé el llenado del formulario. ¿En qué más puedo ayudarte?')
+    });
+    resetDocumentDraft('cancelled');
+  };
+
+  const showFormPartialSnapshot = (introText = 'Esto es lo que llevo hasta ahora:') => {
+    dispatch({ type: 'ADD_MESSAGE', message: createAssistantMessage(introText) });
+    dispatch({ type: 'ADD_MESSAGE', message: createFormConversationSummaryMessage(state.documentDraft, 'Revisa cómo va el llenado:') });
+  };
+
+  const advanceFormToNextField = (nextValues, currentFieldIndex) => {
+    const definition = getDocumentDefinition(state.documentDraft.documentType);
+    const nextFieldIndex = currentFieldIndex + 1;
+    const nextField = definition?.fields[nextFieldIndex] ?? null;
+
+    updateDocumentDraft({
+      values: nextValues,
+      currentFieldIndex: nextFieldIndex,
+      status: nextField ? 'collecting' : 'reviewing',
+      editingFieldId: null
+    });
+
+    if (nextField) {
+      dispatch({ type: 'ADD_MESSAGE', message: createAssistantMessage('Gracias.') });
+      dispatch({ type: 'ADD_MESSAGE', message: createAssistantMessage(getFormFieldPrompt(nextField)) });
+      return;
+    }
+
+    dispatch({ type: 'ADD_MESSAGE', message: createFormConversationSummaryMessage({ ...state.documentDraft, values: nextValues, currentFieldIndex: nextFieldIndex, status: 'reviewing', editingFieldId: null }, 'Ya tengo la información necesaria. Revísala antes de continuar:') });
+    dispatch({ type: 'ADD_MESSAGE', message: createAssistantMessage('¿Confirmas que la información es correcta?') });
+  };
+
+  const enterFormReview = () => {
+    const reviewDraft = {
+      ...state.documentDraft,
+      status: 'reviewing',
+      editingFieldId: null
+    };
+    updateDocumentDraft({
+      status: 'reviewing',
+      editingFieldId: null
+    });
+    dispatch({ type: 'ADD_MESSAGE', message: createFormConversationSummaryMessage(reviewDraft, 'Ya tengo la información necesaria. Revísala antes de continuar:') });
+    dispatch({ type: 'ADD_MESSAGE', message: createAssistantMessage('¿Confirmas que la información es correcta?') });
+  };
+
+  const startFormDocument = (documentType) => {
+    const definition = getDocumentDefinition(documentType);
+    if (!definition) return;
+
+    const nextDraft = {
+      documentType,
+      status: 'collecting',
+      currentFieldIndex: 0,
+      values: {},
+      confirmed: false,
+      editingFieldId: null
+    };
+
+    dispatch({ type: 'ADD_MESSAGE', message: createUserMessage(definition.title) });
+    dispatch({
+      type: 'ADD_MESSAGE',
+      message: createAssistantMessage(`Perfecto. ${definition.intro}`)
+    });
+    dispatch({ type: 'SET_DOCUMENT_DRAFT', value: nextDraft });
+    dispatch({ type: 'ADD_MESSAGE', message: createAssistantMessage(getFormFieldPrompt(definition.fields[0])) });
+  };
+
+  const handleFormSelection = (selectionId) => {
+    if (selectionId === 'back') {
+      cancelFormDraft('Volver');
+      return;
+    }
+
+    startFormDocument(selectionId);
+  };
+
+  const handleFormConfirmation = (confirmationId) => {
+    if (confirmationId === 'form-confirm') {
+      const definition = getDocumentDefinition(state.documentDraft.documentType);
+      if (!definition) return;
+
+      updateDocumentDraft({
+        status: 'confirmed',
+        confirmed: true,
+        editingFieldId: null
+      });
+      dispatch({ type: 'ADD_MESSAGE', message: createAssistantMessage('Perfecto. La información quedó confirmada.') });
+
+      const snapshotDraft = {
+        ...state.documentDraft,
+        status: 'confirmed',
+        confirmed: true,
+        editingFieldId: null
+      };
+      const generatedMeta = buildGeneratedDocumentMeta(snapshotDraft);
+      const generatedDocument = generateMockPdf({
+        title: generatedMeta.title,
+        fileName: generatedMeta.fileName,
+        sections: buildGeneratedDocumentSections(generatedMeta.snapshot)
+      });
+      generatedDocumentUrlsRef.current.push(generatedDocument.url);
+      dispatch({
+        type: 'ADD_MESSAGE',
+        message: createFormGeneratedDocumentMessage(snapshotDraft, generatedDocument, 'Tu documento mock ya está listo para descargar:')
+      });
+      return;
+    }
+
+    if (confirmationId === 'form-edit') {
+      updateDocumentDraft({
+        status: 'editing',
+        editingFieldId: null
+      });
+      dispatch({ type: 'ADD_MESSAGE', message: createAssistantMessage('Claro. ¿Qué dato quieres cambiar?') });
+      return;
+    }
+
+    if (confirmationId === 'form-cancel') {
+      cancelFormDraft();
+    }
+  };
+
+  const handleFormEditingSelection = (fieldId) => {
+    const definition = getDocumentDefinition(state.documentDraft.documentType);
+    const fieldDefinition = definition?.fields.find((item) => item.id === fieldId) ?? null;
+    if (!fieldDefinition) return;
+
+    updateDocumentDraft({
+      status: 'editing',
+      editingFieldId: fieldId
+    });
+    dispatch({ type: 'ADD_MESSAGE', message: createUserMessage(getFormFieldLabel(fieldDefinition)) });
+    dispatch({ type: 'ADD_MESSAGE', message: createAssistantMessage(getFormFieldPrompt(fieldDefinition)) });
+  };
+
+  const handleFormCorrectionValue = (text) => {
+    const editingFieldId = state.documentDraft.editingFieldId;
+    const fieldDefinition = getFormFieldById(state.documentDraft.documentType, editingFieldId) ?? currentFormField;
+    if (!fieldDefinition) return;
+
+    const validation = validateFormField(fieldDefinition, text);
+    if (!validation.valid) {
+      dispatch({ type: 'ADD_MESSAGE', message: createAssistantMessage(validation.error) });
+      dispatch({ type: 'ADD_MESSAGE', message: createAssistantMessage(getFormFieldPrompt(fieldDefinition)) });
+      return;
+    }
+
+    const nextValues = {
+      ...state.documentDraft.values,
+      [fieldDefinition.id]: validation.value
+    };
+    const nextDraft = {
+      ...state.documentDraft,
+      values: nextValues,
+      status: 'reviewing',
+      editingFieldId: null,
+      currentFieldIndex: getDocumentDefinition(state.documentDraft.documentType)?.fields.length ?? state.documentDraft.currentFieldIndex
+    };
+
+    dispatch({ type: 'SET_DOCUMENT_DRAFT', value: nextDraft });
+    dispatch({ type: 'ADD_MESSAGE', message: createAssistantMessage(`Listo, ya quedó actualizado ${getFormFieldLabel(fieldDefinition).toLowerCase()}.`) });
+    dispatch({ type: 'ADD_MESSAGE', message: createFormConversationSummaryMessage(nextDraft, 'Así quedó la información:') });
+    dispatch({ type: 'ADD_MESSAGE', message: createAssistantMessage('¿Confirmas que la información es correcta?') });
+  };
+
+  const handleFormCollectingInput = (text) => {
+    const currentFieldDefinition = currentFormField;
+    if (!currentFieldDefinition) {
+      enterFormReview();
+      return;
+    }
+
+    const normalized = text
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .trim()
+      .replace(/[.!?]+$/g, '');
+
+    if (normalized === 'ver lo que llevo') {
+      showFormPartialSnapshot('Esto es lo que llevo hasta ahora:');
+      dispatch({ type: 'ADD_MESSAGE', message: createAssistantMessage(getFormFollowUpPrompt()) });
+      return;
+    }
+
+    if (normalized === 'cambiar el dato anterior') {
+      const previousFieldDefinition = previousFormField;
+      if (!previousFieldDefinition || state.documentDraft.currentFieldIndex === 0) {
+        dispatch({
+          type: 'ADD_MESSAGE',
+          message: createAssistantMessage('Aún no hay un dato anterior para cambiar. Continuemos con el primero.')
+        });
+        dispatch({ type: 'ADD_MESSAGE', message: createAssistantMessage(getFormFieldPrompt(currentFieldDefinition)) });
+        return;
+      }
+
+      updateDocumentDraft({
+        currentFieldIndex: state.documentDraft.currentFieldIndex - 1,
+        status: 'collecting'
+      });
+      dispatch({ type: 'ADD_MESSAGE', message: createAssistantMessage(`Claro. Volvemos a ${getFormFieldLabel(previousFieldDefinition).toLowerCase()}.`) });
+      dispatch({ type: 'ADD_MESSAGE', message: createAssistantMessage(getFormFieldPrompt(previousFieldDefinition)) });
+      return;
+    }
+
+    const validation = validateFormField(currentFieldDefinition, text);
+    if (!validation.valid) {
+      dispatch({ type: 'ADD_MESSAGE', message: createAssistantMessage(validation.error) });
+      dispatch({ type: 'ADD_MESSAGE', message: createAssistantMessage(getFormFieldPrompt(currentFieldDefinition)) });
+      return;
+    }
+
+    const nextValues = {
+      ...state.documentDraft.values,
+      [currentFieldDefinition.id]: validation.value
+    };
+    advanceFormToNextField(nextValues, state.documentDraft.currentFieldIndex);
+  };
+
+  const handleFormChoosingInput = (text) => {
+    const normalized = text
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .trim();
+
+    if (normalized.includes('aviso de accidente') || normalized.includes('enfermedad')) {
+      startFormDocument('accident_notice');
+      return;
+    }
+
+    if (normalized.includes('solicitud de reembolso') || normalized.includes('reembolso')) {
+      startFormDocument('reimbursement_request');
+      return;
+    }
+
+    dispatch({ type: 'ADD_MESSAGE', message: createAssistantMessage('Elige una de las dos opciones para seguir.') });
+    dispatch({ type: 'ADD_MESSAGE', message: createFormSelectorMessage() });
+  };
+
+  const handleFormInput = (text) => {
+    const normalized = text
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .trim()
+      .replace(/[.!?]+$/g, '');
+
+    if (normalized === 'cancelar' || normalized === 'salir' || normalized === 'volver al inicio' || normalized === 'volver') {
+      cancelFormDraft();
+      return;
+    }
+
+    if (normalized === 'ver lo que llevo') {
+      showFormPartialSnapshot();
+      dispatch({ type: 'ADD_MESSAGE', message: createAssistantMessage(getFormFollowUpPrompt()) });
+      return;
+    }
+
+    if (normalized === 'cambiar el dato anterior') {
+      if (state.documentDraft.status === 'collecting' && state.documentDraft.currentFieldIndex > 0) {
+        updateDocumentDraft({
+          currentFieldIndex: state.documentDraft.currentFieldIndex - 1,
+          status: 'collecting'
+        });
+        dispatch({
+          type: 'ADD_MESSAGE',
+          message: createAssistantMessage(`Claro. Volvemos a ${getFormFieldLabel(previousFormField).toLowerCase()}.`)
+        });
+        dispatch({ type: 'ADD_MESSAGE', message: createAssistantMessage(getFormFieldPrompt(previousFormField)) });
+        return;
+      }
+
+      updateDocumentDraft({
+        status: 'editing',
+        editingFieldId: null
+      });
+      dispatch({ type: 'ADD_MESSAGE', message: createAssistantMessage('Claro. ¿Qué dato quieres cambiar?') });
+      return;
+    }
+
+    if (normalized === 'no lo se' || normalized === 'no se') {
+      dispatch({ type: 'ADD_MESSAGE', message: createAssistantMessage('Entiendo. Pero sí necesito ese dato para completar el documento.') });
+      dispatch({ type: 'ADD_MESSAGE', message: createAssistantMessage(getFormFollowUpPrompt()) });
+      return;
+    }
+
+    if (state.documentDraft.status === 'choosing_document') {
+      handleFormChoosingInput(text);
+      return;
+    }
+
+    if (state.documentDraft.status === 'collecting') {
+      handleFormCollectingInput(text);
+      return;
+    }
+
+    if (state.documentDraft.status === 'reviewing') {
+      if (normalized === 'si' || normalized === 'si confirmar' || normalized === 'si, confirmar' || normalized === 'sí' || normalized === 'sí confirmar' || normalized === 'sí, confirmar') {
+        handleFormConfirmation('form-confirm');
+        return;
+      }
+
+      if (normalized === 'modificar un dato' || normalized === 'cambiar' || normalized === 'editar') {
+        handleFormConfirmation('form-edit');
+        return;
+      }
+
+      if (normalized === 'cancelar' || normalized === 'salir') {
+        handleFormConfirmation('form-cancel');
+        return;
+      }
+
+      const matchedField = findFormFieldByText(state.documentDraft.documentType, text);
+      if (matchedField) {
+        handleFormEditingSelection(matchedField.id);
+        return;
+      }
+
+      dispatch({ type: 'ADD_MESSAGE', message: createAssistantMessage('Puedes confirmar, modificar un dato o cancelar.') });
+      return;
+    }
+
+    if (state.documentDraft.status === 'editing') {
+      if (!state.documentDraft.editingFieldId) {
+        const matchedField = findFormFieldByText(state.documentDraft.documentType, text);
+        if (matchedField) {
+          handleFormEditingSelection(matchedField.id);
+          return;
+        }
+
+        dispatch({ type: 'ADD_MESSAGE', message: createAssistantMessage('¿Qué dato quieres cambiar?') });
+        return;
+      }
+
+      handleFormCorrectionValue(text);
+      return;
+    }
   };
 
   const enterInformationReview = (introText = 'Ahora revisemos la información que tengo del trámite.') => {
@@ -1183,13 +1649,9 @@ export default function ChatbotWorkspace({ onExit }) {
     if (parsed.intent === 'confirm') {
       if (!canContinueInfo) {
         const firstError = Object.values(contactErrors).find(Boolean);
-        const relationshipError =
-          state.person.relationship === 'Otro' && !String(state.person.parentesco ?? '').trim()
-            ? 'Necesito el parentesco de quien realiza el trámite antes de continuar.'
-            : '';
         dispatch({
           type: 'ADD_MESSAGE',
-          message: createAssistantMessage(firstError || relationshipError || 'Todavía falta completar un dato antes de continuar.')
+          message: createAssistantMessage(firstError || 'Todavía falta completar un dato antes de continuar.')
         });
         return;
       }
@@ -1308,6 +1770,12 @@ export default function ChatbotWorkspace({ onExit }) {
 
   const handleIntent = (intent) => {
     const item = chatbotQuickActions.find((option) => option.id === intent);
+    if (intent === 'complete-form') {
+      dispatch({ type: 'ADD_MESSAGE', message: createUserMessage('Completar un formulario') });
+      enterFormSelector();
+      return;
+    }
+
     if (!item) return;
 
     dispatch({ type: 'ADD_MESSAGE', message: createUserMessage(item.label) });
@@ -1535,6 +2003,16 @@ export default function ChatbotWorkspace({ onExit }) {
     dispatch({ type: 'ADD_MESSAGE', message: createUserMessage(text) });
     dispatch({ type: 'SET_DRAFT', value: '' });
 
+    if (['choosing_document', 'collecting', 'reviewing', 'editing'].includes(state.documentDraft.status)) {
+      handleFormInput(text);
+      return;
+    }
+
+    if (/completar un formulario|completar formulario|llenar un formulario|llenar formulario/i.test(text)) {
+      enterFormSelector();
+      return;
+    }
+
     if (isInformationStage(state.stage)) {
       handleInformationInput(text);
       return;
@@ -1576,6 +2054,65 @@ export default function ChatbotWorkspace({ onExit }) {
   };
 
   const handleComposerSuggestion = (item) => {
+    if (item.id === 'complete-form') {
+      dispatch({ type: 'ADD_MESSAGE', message: createUserMessage(item.label) });
+      enterFormSelector();
+      return;
+    }
+
+    if (item.id === 'form-cancel') {
+      dispatch({ type: 'ADD_MESSAGE', message: createUserMessage(item.label) });
+      cancelFormDraft();
+      return;
+    }
+
+    if (item.id === 'form-progress') {
+      dispatch({ type: 'ADD_MESSAGE', message: createUserMessage(item.label) });
+      showFormPartialSnapshot('Esto es lo que llevo hasta ahora:');
+      dispatch({ type: 'ADD_MESSAGE', message: createAssistantMessage(getFormFollowUpPrompt()) });
+      return;
+    }
+
+    if (item.id === 'form-previous') {
+      dispatch({ type: 'ADD_MESSAGE', message: createUserMessage(item.label) });
+      handleFormInput('Cambiar el dato anterior');
+      return;
+    }
+
+    if (item.id === 'form-edit') {
+      dispatch({ type: 'ADD_MESSAGE', message: createUserMessage(item.label) });
+      handleFormConfirmation('form-edit');
+      return;
+    }
+
+    if (item.id === 'form-confirm') {
+      dispatch({ type: 'ADD_MESSAGE', message: createUserMessage(item.label) });
+      handleFormConfirmation('form-confirm');
+      return;
+    }
+
+    const formSelectionById = {
+      accident_notice: 'accident_notice',
+      reimbursement_request: 'reimbursement_request',
+      back: 'back'
+    };
+
+    if (formSelectionById[item.id]) {
+      if (item.id !== 'back') {
+        dispatch({ type: 'ADD_MESSAGE', message: createUserMessage(item.label) });
+      }
+      handleFormSelection(formSelectionById[item.id]);
+      return;
+    }
+
+    if (formDefinition && state.documentDraft.status === 'editing' && !state.documentDraft.editingFieldId) {
+      const matchedField = getFormFieldById(state.documentDraft.documentType, item.id);
+      if (matchedField) {
+        handleFormEditingSelection(matchedField.id);
+        return;
+      }
+    }
+
     if (item.claimField && item.value) {
       handleClaimInput(item.value, true);
       return;
@@ -1663,7 +2200,7 @@ export default function ChatbotWorkspace({ onExit }) {
             </p>
           </div>
 
-          <div className="mt-8 w-full max-w-[760px]">
+      <div className="mt-8 w-full max-w-[760px]">
             <ChatComposer
               value={state.draft}
               onChange={(value) => dispatch({ type: 'SET_DRAFT', value })}
@@ -1674,7 +2211,10 @@ export default function ChatbotWorkspace({ onExit }) {
                 if (targetDocument) handleDocumentUpload(targetDocument.id, files);
               }}
               placeholder="Pregunta a Allianz México"
-              suggestions={starterQuickReplies}
+              suggestions={[
+                { id: 'complete-form', label: 'Completar un formulario' },
+                ...starterQuickReplies
+              ]}
               onSuggestion={handleComposerSuggestion}
               variant="hero"
             />
@@ -1935,14 +2475,6 @@ export default function ChatbotWorkspace({ onExit }) {
               />
             </InlineFormGrid>
 
-            {state.person.relationship === 'Otro' ? (
-              <FormField
-                label="Parentesco"
-                value={state.person.parentesco}
-                onChange={(value) => dispatch({ type: 'SET_PERSON_FIELD', field: 'parentesco', value })}
-                helperText="Indica el parentesco de quien realiza el trámite."
-              />
-            ) : null}
           </div>
 
           <div className="mt-5 flex justify-end">
@@ -1950,7 +2482,6 @@ export default function ChatbotWorkspace({ onExit }) {
               type="button"
               className="focus-ring inline-flex items-center justify-center rounded-full bg-[#003781] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#002356]"
               onClick={() => {
-                if (state.person.relationship === 'Otro' && !String(state.person.parentesco ?? '').trim()) return;
                 dispatch({ type: 'ADD_MESSAGE', message: createAssistantMessage('Ahora voy a mostrar los datos de contacto para continuar.') });
                 dispatch({ type: 'SET_STAGE', value: 'information-contact' });
               }}
@@ -2090,7 +2621,17 @@ export default function ChatbotWorkspace({ onExit }) {
             <div ref={threadRef} className="min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-6 lg:px-8">
               <div className="mx-auto flex w-full max-w-[980px] flex-col gap-4">
                 {state.messages.map((message) =>
-                  message.type === 'claim-summary' ? (
+                  message.type === 'form-selector' ? (
+                    <FormDocumentSelector
+                      key={message.id}
+                      message={message}
+                      onSelect={(option) => handleFormSelection(option.id)}
+                    />
+                  ) : message.type === 'form-summary' ? (
+                    <FormSummaryMessage key={message.id} message={message} />
+                  ) : message.type === 'form-generated-document' ? (
+                    <FormGeneratedDocumentMessage key={message.id} message={message} />
+                  ) : message.type === 'claim-summary' ? (
                     <ClaimSummaryMessage key={message.id} message={message} />
                   ) : message.type === 'information-summary' ? (
                     <InformationSummaryMessage key={message.id} message={message} />
@@ -2148,23 +2689,34 @@ export default function ChatbotWorkspace({ onExit }) {
               </div>
             </div>
 
-            {!isWelcomeEmpty ? (
+                {!isWelcomeEmpty ? (
               <ChatComposer
                 value={state.draft}
                 onChange={(value) => dispatch({ type: 'SET_DRAFT', value })}
                 onSend={handleComposerSend}
                 onAttach={(files) => {
-                  if (!state.flow) return;
+                  if (isFormActive || !state.flow) return;
                   const targetDocument = state.documents.find((document) => document.status === 'pending') ?? state.documents[0];
                   if (targetDocument) handleDocumentUpload(targetDocument.id, files);
                 }}
-                placeholder="Escribe tu mensaje o selecciona una opción"
+                placeholder={isFormActive ? 'Responde en el chat' : 'Escribe tu mensaje o selecciona una opción'}
                 suggestions={
-                  state.stage === 'claim'
-                    ? getClaimQuickReplies(state.flow, state.claimCorrectionField)
-                    : isInformationStage(state.stage)
-                      ? informationQuickReplies
-                      : chatbotQuickActions
+                  state.documentDraft.status === 'choosing_document'
+                    ? formDocumentSelectionOptions
+                    : state.documentDraft.status === 'collecting'
+                      ? formComposerInterruptions
+                      : state.documentDraft.status === 'reviewing'
+                        ? formReviewOptions
+                        : state.documentDraft.status === 'editing' && !state.documentDraft.editingFieldId
+                          ? (formDefinition?.fields ?? []).map((fieldItem) => ({
+                              id: fieldItem.id,
+                              label: getFormFieldLabel(fieldItem)
+                            }))
+                          : state.stage === 'claim'
+                            ? getClaimQuickReplies(state.flow, state.claimCorrectionField)
+                            : isInformationStage(state.stage)
+                              ? informationQuickReplies
+                              : chatbotQuickActions
                 }
                 onSuggestion={handleComposerSuggestion}
               />

@@ -25,7 +25,6 @@ export default function InformationSummaryMessage({ message }) {
         <SummaryRow label="Tipo de producto" value={data.productType} identified={data.policyAutoIdentified} />
         <SummaryRow label="Número de póliza" value={data.policyNumber} identified={data.policyAutoIdentified} />
         <SummaryRow label="Persona que realiza el trámite" value={data.relationship} identified={data.personAutoIdentified} />
-        {data.relationship === 'Otro' ? <SummaryRow label="Parentesco" value={data.parentesco} /> : null}
         <SummaryRow label="Nombre" value={data.fullName} identified={data.personAutoIdentified} />
         {data.phoneLandline ? <SummaryRow label="Teléfono particular" value={data.phoneLandline} /> : null}
         <SummaryRow label="Teléfono celular" value={data.mobilePhone} identified={data.contactAutoIdentified} />

@@ -2,16 +2,13 @@ import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import ConfirmationModal from './components/ConfirmationModal';
 import ChatbotWorkspace from './components/ChatbotWorkspace';
 import FilePreviewModal from './components/FilePreviewModal';
-import InfoIntroModal from './components/InfoIntroModal';
 import InfoModal from './components/InfoModal';
 import TramiteSelectionScreen from './components/TramiteSelectionScreen';
 import TransitionScreen from './components/TransitionScreen';
 import WizardStepper from './components/WizardStepper';
-import WizardStepClaim from './components/WizardStepClaim';
 import WizardStepDocuments from './components/WizardStepDocuments';
 import WizardStepInformation from './components/WizardStepInformation';
 import WizardStepReview from './components/WizardStepReview';
-import WizardStepValidation from './components/WizardStepValidation';
 import { CheckIcon } from './components/Icon';
 import { createInitialWizardState, createMockFileMeta, countDocumentsByStatus, getLoadedDocuments, validationStages } from './data/mockReembolso';
 
@@ -85,9 +82,22 @@ function reducer(state, action) {
     case 'RESET_VALIDATION':
       return {
         ...state,
-        validationPhase: 'idle',
+        validationPhase: action.value ?? 'idle',
         validationStageIndex: 0,
         validationCompleted: false
+      };
+    case 'COMPLETE_VALIDATION':
+      return {
+        ...state,
+        documents: state.documents.map((document) => {
+          if (!document.files.length) return document;
+          const requiresReview = document.id === 'informe';
+          return {
+            ...document,
+            status: requiresReview ? 'requires_review' : 'validated',
+            validationNote: requiresReview ? 'Nombre con diferencia detectada' : 'Documento validado automáticamente'
+          };
+        })
       };
     case 'SET_VALIDATION_COMPLETED':
       return { ...state, validationCompleted: action.value };
@@ -209,7 +219,6 @@ function getReviewBlockedReason(state, selectedTramite) {
   if (contactErrors.mobilePhone || contactErrors.email || contactErrors.emailConfirmation || contactErrors.phoneLandline) return 'contact';
   if (state.person.relationship === 'Otro') {
     if (
-      !String(state.person.parentesco ?? '').trim() ||
       !String(state.person.firstName ?? '').trim() ||
       !String(state.person.paternalLastName ?? '').trim() ||
       !String(state.person.maternalLastName ?? '').trim()
@@ -222,12 +231,11 @@ function getReviewBlockedReason(state, selectedTramite) {
   return '';
 }
 
-function getInformationBlockedReason(state) {
+function getInformationBlockedReason(state, selectedTramite) {
   const contactErrors = getContactErrors(state.contact);
   if (contactErrors.mobilePhone || contactErrors.email || contactErrors.emailConfirmation || contactErrors.phoneLandline) return 'contact';
   if (state.person.relationship === 'Otro') {
     if (
-      !String(state.person.parentesco ?? '').trim() ||
       !String(state.person.firstName ?? '').trim() ||
       !String(state.person.paternalLastName ?? '').trim() ||
       !String(state.person.maternalLastName ?? '').trim()
@@ -235,14 +243,16 @@ function getInformationBlockedReason(state) {
       return 'person';
     }
   }
+  const claimErrors = getClaimErrors(state.claimant, selectedTramite);
+  if (claimErrors.sinisterNumber || claimErrors.attentionPlace || claimErrors.tramiteType || claimErrors.observations) return 'claim';
   return '';
 }
 
 function getRelatedStepIndex(alert) {
   const title = `${alert.field} ${alert.sourceDocument} ${alert.comparedDocument}`.toLowerCase();
-  if (title.includes('clabe') || title.includes('siniestro')) return 3;
+  if (title.includes('clabe') || title.includes('siniestro')) return 1;
   if (title.includes('póliza') || title.includes('correo') || title.includes('teléfono') || title.includes('nombre') || title.includes('firma')) {
-    return 2;
+    return 1;
   }
   return 0;
 }
@@ -263,20 +273,19 @@ function WizardApp() {
   const [state, dispatch] = useReducer(reducer, undefined, () => createInitialWizardState(initialTramite === 'chatbot' ? 'chatbot' : 'entry'));
   const [showDocsWarningModal, setShowDocsWarningModal] = useState(false);
   const [docsWarningContext, setDocsWarningContext] = useState('partial');
+  const [showValidationConfirmModal, setShowValidationConfirmModal] = useState(false);
   const [showAlertContinueModal, setShowAlertContinueModal] = useState(false);
   const [filePreview, setFilePreview] = useState(null);
   const [highlightedDocumentId, setHighlightedDocumentId] = useState(null);
   const [selectedTramite, setSelectedTramite] = useState(initialTramite === 'chatbot' ? null : initialTramite);
   const [hasViewedReimbursementPopup, setHasViewedReimbursementPopup] = useState(false);
   const [showTramiteInfoModal, setShowTramiteInfoModal] = useState(false);
-  const [showTramiteDocumentsModal, setShowTramiteDocumentsModal] = useState(false);
   const uploadTimersRef = useRef({});
   const validationTimersRef = useRef([]);
   const toastTimerRef = useRef(null);
   const selectionNextButtonRef = useRef(null);
   const selectedTramiteRequiresIntro = selectedTramite === 'reembolso' || selectedTramite === 'cirugia_programada';
-  const selectedTramiteCanProceed =
-    selectedTramite === 'chatbot' || (selectedTramiteRequiresIntro && hasViewedReimbursementPopup && !showTramiteInfoModal && !showTramiteDocumentsModal);
+  const selectedTramiteCanProceed = selectedTramite === 'chatbot' || (selectedTramiteRequiresIntro && hasViewedReimbursementPopup && !showTramiteInfoModal);
   const selectedTramiteLabel =
     selectedTramite === 'cirugia_programada' ? 'Cirugía Programada' : selectedTramite === 'chatbot' ? 'Chatbot Web' : 'Reembolso';
 
@@ -307,7 +316,7 @@ function WizardApp() {
   }, [state.phase]);
 
   useEffect(() => {
-    if (state.phase !== 'wizard' || state.currentStep !== 1 || state.validationPhase !== 'processing') return undefined;
+    if (state.phase !== 'wizard' || state.currentStep !== 0 || state.validationPhase !== 'processing') return undefined;
 
     validationTimersRef.current.forEach((timerId) => clearTimeout(timerId));
     validationTimersRef.current = [];
@@ -321,6 +330,7 @@ function WizardApp() {
 
     const completeTimer = window.setTimeout(() => {
       dispatch({ type: 'SET_VALIDATION_STAGE_INDEX', value: validationStages.length - 1 });
+      dispatch({ type: 'COMPLETE_VALIDATION' });
       dispatch({ type: 'SET_VALIDATION_PHASE', value: 'results' });
       dispatch({ type: 'SET_VALIDATION_COMPLETED', value: true });
     }, 320 * validationStages.length + 180);
@@ -353,7 +363,10 @@ function WizardApp() {
 
   const contactErrors = useMemo(() => getContactErrors(state.contact), [state.contact]);
   const claimErrors = useMemo(() => getClaimErrors(state.claimant, selectedTramite), [state.claimant, selectedTramite]);
-  const informationBlockedReason = useMemo(() => getInformationBlockedReason(state), [state.contact, state.person]);
+  const informationBlockedReason = useMemo(
+    () => getInformationBlockedReason(state, selectedTramite),
+    [state.contact, state.person, state.claimant, selectedTramite]
+  );
   const reviewBlockedReason = useMemo(() => getReviewBlockedReason(state, selectedTramite), [state.contact, state.person, state.claimant, selectedTramite]);
 
   const loadedDocuments = useMemo(() => getLoadedDocuments(state.documents), [state.documents]);
@@ -389,12 +402,11 @@ function WizardApp() {
   };
 
   const markValidationReset = () => {
-    dispatch({ type: 'RESET_VALIDATION' });
+    dispatch({ type: 'RESET_VALIDATION', value: state.validationCompleted ? 'outdated' : 'idle' });
     dispatch({ type: 'SET_REVIEW_CONFIRMED', value: false });
   };
 
   const startValidation = () => {
-    dispatch({ type: 'SET_STEP', value: 1 });
     dispatch({ type: 'SET_VALIDATION_STAGE_INDEX', value: 0 });
     dispatch({ type: 'SET_VALIDATION_COMPLETED', value: false });
     dispatch({ type: 'SET_VALIDATION_PHASE', value: 'processing' });
@@ -408,7 +420,6 @@ function WizardApp() {
     setSelectedTramite(tramiteId);
     setHasViewedReimbursementPopup(false);
     setShowTramiteInfoModal(false);
-    setShowTramiteDocumentsModal(false);
     window.history.pushState({}, '', getPathForTramite(tramiteId));
     if (tramiteId === 'chatbot') {
       dispatch({ type: 'SET_PHASE', value: 'chatbot' });
@@ -421,11 +432,6 @@ function WizardApp() {
 
   const handleSelectionInfoClose = () => {
     setShowTramiteInfoModal(false);
-    if (selectedTramiteRequiresIntro) setShowTramiteDocumentsModal(true);
-  };
-
-  const handleSelectionDocumentsClose = () => {
-    setShowTramiteDocumentsModal(false);
     if (selectedTramiteRequiresIntro) {
       setHasViewedReimbursementPopup(true);
       window.requestAnimationFrame(() => {
@@ -451,18 +457,11 @@ function WizardApp() {
     dispatch({ type: 'SET_STEP', value: stepIndex });
   };
 
-  const handleDocumentsContinue = () => {
+  const openValidationConfirmation = () => {
     const hasDocuments = state.documents.some((document) => document.files.length > 0);
-    const hasObservations = Boolean(state.observations.trim());
     const hasEmptyDocuments = state.documents.some((document) => document.files.length === 0);
 
-    if (!hasDocuments && !hasObservations) {
-      return;
-    }
-
-    if (!hasDocuments) {
-      setDocsWarningContext('no-docs');
-      setShowDocsWarningModal(true);
+    if (!hasDocuments || state.validationPhase === 'processing') {
       return;
     }
 
@@ -472,7 +471,7 @@ function WizardApp() {
       return;
     }
 
-    startValidation();
+    setShowValidationConfirmModal(true);
   };
 
   const handleDocsWarningProceed = () => {
@@ -483,29 +482,33 @@ function WizardApp() {
       dispatch({ type: 'SET_ALERTS', value: [] });
       dispatch({ type: 'CLEAR_ALERT_DECISIONS' });
       dispatch({ type: 'SET_REVIEW_CONFIRMED', value: false });
-      dispatch({ type: 'SET_STEP', value: 2 });
+      dispatch({ type: 'SET_STEP', value: 1 });
       return;
     }
 
-    startValidation();
+    setShowValidationConfirmModal(true);
   };
 
-  const handleValidationContinue = () => {
+  const handleDocumentsContinue = () => {
+    if (!state.validationCompleted || state.validationPhase !== 'results') return;
     if (activeAlerts.length > 0) {
       setShowAlertContinueModal(true);
       return;
     }
-    dispatch({ type: 'SET_STEP', value: 2 });
+    dispatch({ type: 'SET_STEP', value: 1 });
   };
 
   const handleInformationContinue = () => {
-    if (informationBlockedReason) return;
-    dispatch({ type: 'SET_STEP', value: 3 });
-  };
-
-  const handleClaimContinue = () => {
-    if (claimErrors.sinisterNumber || claimErrors.attentionPlace || claimErrors.tramiteType || claimErrors.observations) return;
-    dispatch({ type: 'SET_STEP', value: 4 });
+    if (informationBlockedReason) {
+      window.requestAnimationFrame(() => {
+        const firstInvalid = document.querySelector('[aria-invalid="true"]');
+        firstInvalid?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        firstInvalid?.focus();
+      });
+      showToast('Revisa los datos marcados antes de continuar.');
+      return;
+    }
+    dispatch({ type: 'SET_STEP', value: 2 });
   };
 
   const handleClaimantFieldChange = (field, value) => {
@@ -556,10 +559,14 @@ function WizardApp() {
     setSelectedTramite(null);
     setHasViewedReimbursementPopup(false);
     setShowTramiteInfoModal(false);
-    setShowTramiteDocumentsModal(false);
     window.history.pushState({}, '', '/');
     dispatch({ type: 'SET_PHASE', value: 'entry' });
     dispatch({ type: 'SET_STEP', value: 0 });
+  };
+
+  const handleValidationConfirm = () => {
+    setShowValidationConfirmModal(false);
+    startValidation();
   };
 
   const handleDocumentUpload = (documentId, files) => {
@@ -575,8 +582,8 @@ function WizardApp() {
       type: 'SET_DOCUMENT_FILES',
       documentId,
       files: nextFiles,
-      status: 'processing',
-      validationNote: 'Procesando documento'
+      status: 'uploaded',
+      validationNote: 'Listo para validar'
     });
     markValidationReset();
 
@@ -585,9 +592,8 @@ function WizardApp() {
       dispatch({
         type: 'SET_DOCUMENT_STATUS',
         documentId,
-        status: documentId === 'informe' ? 'requires_review' : 'validated',
-        validationNote:
-          documentId === 'informe' ? 'Nombre con diferencia detectada' : 'Documento validado automáticamente'
+        status: 'uploaded',
+        validationNote: 'Listo para validar'
       });
       delete uploadTimersRef.current[documentId];
     }, 1200);
@@ -639,15 +645,13 @@ function WizardApp() {
 
   const handleModalContinueAlerts = () => {
     setShowAlertContinueModal(false);
-    dispatch({ type: 'SET_STEP', value: 2 });
+    dispatch({ type: 'SET_STEP', value: 1 });
   };
 
   const handleCurrentStepPrimary = () => {
     if (state.currentStep === 0) handleDocumentsContinue();
-    if (state.currentStep === 1) handleValidationContinue();
-    if (state.currentStep === 2) handleInformationContinue();
-    if (state.currentStep === 3) handleClaimContinue();
-    if (state.currentStep === 4) handleConfirmSend();
+    if (state.currentStep === 1) handleInformationContinue();
+    if (state.currentStep === 2) handleConfirmSend();
   };
 
   const renderWizardStep = () => {
@@ -666,6 +670,18 @@ function WizardApp() {
           onBack={() => dispatch({ type: 'SET_PHASE', value: 'entry' })}
           onSaveDraft={handleSaveDraft}
           onPrimary={handleDocumentsContinue}
+          onValidate={openValidationConfirmation}
+          validationPhase={state.validationPhase}
+          validationStageIndex={state.validationStageIndex}
+          validationProgress={validationProgress}
+          validationCompleted={state.validationCompleted}
+          summary={validationSummary}
+          correctDocuments={correctDocuments}
+          reviewDocuments={reviewDocuments}
+          alerts={activeAlerts}
+          onResolveAlert={handleAlertResolve}
+          onEditDocument={handleEditDocument}
+          onIgnoreAlert={handleAlertIgnore}
           highlightedDocumentId={highlightedDocumentId}
         />
       );
@@ -673,33 +689,15 @@ function WizardApp() {
 
     if (state.currentStep === 1) {
       return (
-        <WizardStepValidation
-          validationPhase={state.validationPhase}
-          validationStageIndex={state.validationStageIndex}
-          validationProgress={validationProgress}
-          summary={validationSummary}
-          correctDocuments={correctDocuments}
-          reviewDocuments={reviewDocuments}
-          alerts={activeAlerts}
-          onBack={() => dispatch({ type: 'SET_STEP', value: 0 })}
-          onSaveDraft={handleSaveDraft}
-          onPrimary={handleValidationContinue}
-          onResolveAlert={handleAlertResolve}
-          onEditDocument={handleEditDocument}
-          onIgnoreAlert={handleAlertIgnore}
-        />
-      );
-    }
-
-    if (state.currentStep === 2) {
-      return (
         <WizardStepInformation
           policy={state.policy}
           person={state.person}
           contact={state.contact}
           claimant={state.claimant}
+          selectedTramite={selectedTramite}
           extracted={state.extracted}
           contactErrors={contactErrors}
+          claimErrors={claimErrors}
           onPolicyChange={(field, value) => {
             dispatch({ type: 'SET_POLICY_FIELD', field, value });
             dispatch({ type: 'SET_REVIEW_CONFIRMED', value: false });
@@ -715,27 +713,10 @@ function WizardApp() {
           onClaimantChange={(field, value) => {
             handleClaimantFieldChange(field, value);
           }}
-          onBack={() => dispatch({ type: 'SET_STEP', value: 1 })}
+          onBack={() => dispatch({ type: 'SET_STEP', value: 0 })}
           onSaveDraft={handleSaveDraft}
           onPrimary={handleInformationContinue}
-          primaryDisabled={Boolean(informationBlockedReason)}
-        />
-      );
-    }
-
-    if (state.currentStep === 3) {
-      return (
-        <WizardStepClaim
-          claimant={state.claimant}
-          onClaimantChange={(field, value) => {
-            handleClaimantFieldChange(field, value);
-          }}
-          onBack={() => dispatch({ type: 'SET_STEP', value: 2 })}
-          onSaveDraft={handleSaveDraft}
-          onPrimary={handleClaimContinue}
-          primaryDisabled={Boolean(claimErrors.sinisterNumber || claimErrors.attentionPlace || claimErrors.tramiteType || claimErrors.observations)}
-          claimErrors={claimErrors}
-          selectedTramite={selectedTramite}
+          primaryDisabled={false}
         />
       );
     }
@@ -752,7 +733,7 @@ function WizardApp() {
         reviewConfirmed={state.reviewConfirmed}
         onReviewConfirmedChange={(value) => dispatch({ type: 'SET_REVIEW_CONFIRMED', value })}
         recaptchaVisual
-        onBack={() => dispatch({ type: 'SET_STEP', value: 3 })}
+        onBack={() => dispatch({ type: 'SET_STEP', value: 1 })}
         onSaveDraft={handleSaveDraft}
         onPrimary={handleConfirmSend}
         onEditStep={(stepIndex) => dispatch({ type: 'SET_STEP', value: stepIndex })}
@@ -782,8 +763,7 @@ function WizardApp() {
           nextDisabled={!selectedTramiteCanProceed}
           nextButtonRef={selectionNextButtonRef}
         />
-        <InfoIntroModal open={showTramiteInfoModal} onContinue={handleSelectionInfoClose} tramiteLabel={selectedTramiteLabel} />
-        <InfoModal open={showTramiteDocumentsModal} onClose={handleSelectionDocumentsClose} tramiteLabel={selectedTramiteLabel} />
+        <InfoModal open={showTramiteInfoModal} onClose={handleSelectionInfoClose} tramiteLabel={selectedTramiteLabel} />
       </div>
     );
   }
@@ -811,8 +791,17 @@ function WizardApp() {
         {state.phase === 'wizard' && <section className="mx-auto mt-4 flex-1 w-full max-w-[980px]">{renderWizardStep()}</section>}
       </main>
 
-      <InfoIntroModal open={showTramiteInfoModal} onContinue={handleSelectionInfoClose} tramiteLabel={selectedTramiteLabel} />
-      <InfoModal open={showTramiteDocumentsModal} onClose={handleSelectionDocumentsClose} tramiteLabel={selectedTramiteLabel} />
+      <InfoModal open={showTramiteInfoModal} onClose={handleSelectionInfoClose} tramiteLabel={selectedTramiteLabel} />
+
+      <ConfirmationModal
+        open={showValidationConfirmModal}
+        title="¿Listo para validar?"
+        description={`Revisaremos los documentos que adjuntaste. Mientras se procesan, no podrás modificarlos.${state.documents.some((document) => document.files.length === 0) ? ' Hay documentos pendientes. Puedes continuar, pero el resultado podría incluir observaciones.' : ''}`}
+        confirmLabel="Sí, validar"
+        cancelLabel="Revisar documentos"
+        onConfirm={handleValidationConfirm}
+        onCancel={() => setShowValidationConfirmModal(false)}
+      />
 
       <ConfirmationModal
         open={showDocsWarningModal}

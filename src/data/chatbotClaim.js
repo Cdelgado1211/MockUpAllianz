@@ -17,7 +17,7 @@ const CLAIM_FIELD_PROMPTS = {
   attentionPlace: '¿El lugar de atención es Trámite Nacional o Trámite Internacional?',
   tramiteType: '¿Qué tipo de trámite necesitas: Cirugía, Medicamentos, Estudios, Rehabilitación, Enfermería y Home Care u Otros?',
   observations: '¿Qué observaciones deseas agregar?',
-  currency: '¿Cuál es la moneda correcta: Pesos, Dólares, Euros u Otros?',
+  currency: '¿Cuál es la moneda correcta: Pesos, Dolares u Otros?',
   claimedAmount: '¿Cuál es el monto reclamado correcto?',
   receiptsCount: '¿Cuántos recibos o facturas vas a presentar?'
 };
@@ -87,8 +87,7 @@ function extractClaimValue(text, field) {
   }
 
   if (field === 'currency') {
-    if (normalized.includes('dolar')) return 'Dólares';
-    if (normalized.includes('euro')) return 'Euros';
+    if (normalized.includes('dolar')) return 'Dolares';
     if (normalized.includes('peso')) return 'Pesos';
     if (normalized.includes('otro')) return 'Otros';
   }
@@ -204,7 +203,7 @@ export function validateClaimValue(field, value) {
     knowsSinisterNumber: ['Sí', 'No'],
     attentionPlace: ['Trámite Nacional', 'Trámite Internacional'],
     tramiteType: ['Cirugía', 'Medicamentos', 'Estudios', 'Rehabilitación', 'Enfermería y Home Care', 'Otros'],
-    currency: ['Pesos', 'Dólares', 'Euros', 'Otros']
+    currency: ['Pesos', 'Dolares', 'Otros']
   };
 
   if (allowedValues[field] && !allowedValues[field].includes(trimmed)) {

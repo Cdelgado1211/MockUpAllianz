@@ -6,12 +6,12 @@ export default function ValidationProcessingScreen({ stageIndex, progress }) {
     <section className="mx-auto w-full max-w-[980px] rounded-[20px] border border-[#E0E6ED] bg-white p-5 shadow-sm sm:p-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <p className="text-xs font-bold uppercase tracking-[0.24em] text-[#006494]">Validación</p>
+          <p className="text-xs font-bold uppercase tracking-[0.24em] text-[#006494]">Documentos y validación</p>
           <h2 className="mt-1 text-[22px] font-semibold leading-7 text-[#181C1E] sm:text-[28px]">
-            Estoy revisando tus documentos
+            Estamos revisando tus documentos
           </h2>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-[#434751]">
-            Dame un momento mientras verifico lo que cargaste y preparo el siguiente paso.
+            Estamos revisando los archivos. Esto puede tomar unos momentos.
           </p>
         </div>
 

@@ -1,8 +1,6 @@
 export const wizardSteps = [
-  { id: 'documents', label: 'Documentos', shortLabel: 'Docs' },
-  { id: 'validation', label: 'Validación', shortLabel: 'Val' },
+  { id: 'documents-validation', label: 'Documentos y validación', shortLabel: 'Docs y validación' },
   { id: 'information', label: 'Información', shortLabel: 'Info' },
-  { id: 'claim', label: 'Reclamación', shortLabel: 'Rec' },
   { id: 'review', label: 'Revisión', shortLabel: 'Rev' }
 ];
 

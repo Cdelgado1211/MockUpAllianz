@@ -55,6 +55,7 @@ function TextInput({
         value={value}
         onChange={(event) => onChange(event.target.value)}
         readOnly={readOnly}
+        aria-invalid={Boolean(error)}
         disabled={disabled}
         placeholder={placeholder}
         className={`h-12 w-full rounded-xl border px-4 text-sm font-medium text-[#181C1E] outline-none transition placeholder:text-[#97A1AF] focus:ring-2 focus:ring-[#006494] focus:ring-offset-2 focus:ring-offset-white ${
@@ -83,6 +84,7 @@ function SelectField({
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
+        aria-invalid={Boolean(error)}
         className={`h-12 w-full rounded-xl border px-4 text-sm font-medium text-[#181C1E] outline-none transition focus:ring-2 focus:ring-[#006494] focus:ring-offset-2 focus:ring-offset-white ${
           error ? 'border-[#F3B6AA] bg-[#FFF7F6]' : 'border-[#E0E6ED] bg-white'
         }`}
@@ -93,6 +95,7 @@ function SelectField({
           </option>
         ))}
       </select>
+      {error ? <p className="mt-1.5 text-xs font-semibold text-[#D93025]">{error}</p> : null}
     </FieldFrame>
   );
 }
@@ -134,13 +137,9 @@ function ChoiceGroup({ label, value, options, onChange, helperText, error, selec
   );
 }
 
-export default function WizardStepClaim({
+export function ClaimInformationSection({
   claimant,
   onClaimantChange,
-  onBack,
-  onSaveDraft,
-  onPrimary,
-  primaryDisabled = false,
   claimErrors = {},
   selectedTramite
 }) {
@@ -148,15 +147,7 @@ export default function WizardStepClaim({
   const isSurgery = selectedTramite === 'cirugia_programada';
 
   return (
-    <section className="space-y-4">
-      <section className="rounded-[20px] border border-[#E0E6ED] bg-white p-5 shadow-sm sm:p-6">
-        <p className="text-xs font-bold uppercase tracking-[0.28em] text-[#006494]">Sección 4 · Reclamación</p>
-        <h2 className="mt-1 text-[30px] font-semibold leading-tight text-[#181C1E] sm:text-[32px]">Revisión de reclamación</h2>
-        <p className="mt-3 max-w-4xl text-base leading-7 text-[#434751]">
-          Completa la información principal del reclamo. Los valores precargados pueden editarse antes de continuar.
-        </p>
-      </section>
-
+    <>
       <SectionCard
         eyebrow="Tipo de reclamación"
         title="Datos de la reclamación"
@@ -250,12 +241,17 @@ export default function WizardStepClaim({
           description="Los datos precargados siguen siendo editables y se usan para preparar la siguiente etapa del flujo."
         >
           <div className="grid gap-4 md:grid-cols-2">
-            <TextInput
+            <SelectField
               label="Moneda"
               value={claimant.currency}
               onChange={(value) => onClaimantChange('currency', value)}
               autoIdentified={claimant.identifiedAutomatically}
               helperText="Selecciona la moneda de los recibos."
+              options={[
+                { value: 'Pesos', label: 'Pesos' },
+                { value: 'Dolares', label: 'Dolares' },
+                { value: 'Otros', label: 'Otros' }
+              ]}
             />
 
             <TextInput
@@ -274,6 +270,36 @@ export default function WizardStepClaim({
           </div>
         </SectionCard>
       ) : null}
+    </>
+  );
+}
+
+export default function WizardStepClaim({
+  claimant,
+  onClaimantChange,
+  onBack,
+  onSaveDraft,
+  onPrimary,
+  primaryDisabled = false,
+  claimErrors = {},
+  selectedTramite
+}) {
+  return (
+    <section className="space-y-4">
+      <section className="rounded-[20px] border border-[#E0E6ED] bg-white p-5 shadow-sm sm:p-6">
+        <p className="text-xs font-bold uppercase tracking-[0.28em] text-[#006494]">Sección 3 · Reclamación</p>
+        <h2 className="mt-1 text-[30px] font-semibold leading-tight text-[#181C1E] sm:text-[32px]">Revisión de reclamación</h2>
+        <p className="mt-3 max-w-4xl text-base leading-7 text-[#434751]">
+          Completa la información principal del reclamo. Los valores precargados pueden editarse antes de continuar.
+        </p>
+      </section>
+
+      <ClaimInformationSection
+        claimant={claimant}
+        onClaimantChange={onClaimantChange}
+        claimErrors={claimErrors}
+        selectedTramite={selectedTramite}
+      />
 
       <section className="rounded-[20px] border border-[#CFE8D5] bg-[#F6FBF7] p-5 shadow-sm sm:p-6">
         <div className="flex items-start gap-4">

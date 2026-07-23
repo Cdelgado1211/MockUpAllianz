@@ -42,10 +42,10 @@ export default function WizardStepper({ steps = wizardSteps, currentStep = 0, on
       style={{ minHeight: 'auto' }}
     >
       <ol
-        className="relative min-w-[720px]"
+        className="relative min-w-[640px]"
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(5, minmax(0, 1fr))',
+          gridTemplateColumns: `repeat(${steps.length}, minmax(0, 1fr))`,
           alignItems: 'start',
           gap: 0
         }}

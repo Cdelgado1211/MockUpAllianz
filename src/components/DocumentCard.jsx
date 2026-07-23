@@ -41,7 +41,8 @@ export default function DocumentCard({
   onReplaceFile,
   onSelectFiles,
   onDropFiles,
-  isHighlighted = false
+  isHighlighted = false,
+  disabled = false
 }) {
   const inputRef = useRef(null);
   const multiple = document.multiple;
@@ -64,6 +65,7 @@ export default function DocumentCard({
       : 'hover:border-sky-300 hover:bg-sky-50/30';
 
   const openPicker = () => {
+    if (disabled) return;
     if (inputRef.current) inputRef.current.click();
   };
 
@@ -75,6 +77,7 @@ export default function DocumentCard({
 
   const handleDrop = (event) => {
     event.preventDefault();
+    if (disabled) return;
     const files = Array.from(event.dataTransfer.files ?? []);
     if (files.length) onDropFiles(files);
   };
@@ -133,8 +136,9 @@ export default function DocumentCard({
             {hasIssue ? 'Revisa este documento antes de continuar:' : 'Arrastra y suelta aquí'}
           </p>
           <p className="mt-2 text-sm text-slate-500 sm:text-[15px]">PDF, JPG o PNG</p>
-          <button
-            type="button"
+        <button
+          type="button"
+          disabled={disabled}
             className={`focus-ring mt-4 inline-flex items-center justify-center rounded-full border bg-white px-5 py-2.5 text-sm font-extrabold transition ${
               hasIssue
                 ? 'border-[#003781] text-[#003781] hover:bg-[#F8FBFF]'
@@ -189,6 +193,7 @@ export default function DocumentCard({
                     className={`rounded-full px-3 py-1.5 text-xs font-bold transition ${
                       hasIssue ? 'bg-white text-[#003781] hover:bg-[#F8FBFF]' : 'bg-sky-50 text-sky-800 hover:bg-sky-100'
                     }`}
+                    disabled={disabled}
                     onClick={() => onReplaceFile(openPicker)}
                   >
                     Reemplazar
@@ -196,6 +201,7 @@ export default function DocumentCard({
                   <button
                     type="button"
                     className="rounded-full bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-700 transition hover:bg-rose-100"
+                    disabled={disabled}
                     onClick={() => onRemoveFile(file.id)}
                   >
                     Eliminar

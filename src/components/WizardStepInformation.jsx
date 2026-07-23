@@ -1,4 +1,5 @@
 import WizardFooter from './WizardFooter';
+import { ClaimInformationSection } from './WizardStepClaim';
 import {
   CheckIcon,
   InfoIcon,
@@ -68,6 +69,7 @@ function TextInput({
         onChange={(event) => onChange(event.target.value)}
         readOnly={readOnly}
         placeholder={placeholder}
+        aria-invalid={Boolean(error)}
         className={`h-12 w-full rounded-xl border px-4 text-sm font-medium text-[#181C1E] outline-none transition placeholder:text-[#97A1AF] focus:ring-2 focus:ring-[#006494] focus:ring-offset-2 focus:ring-offset-white ${
           error
             ? 'border-[#F3B6AA] bg-[#FFF7F6]'
@@ -80,13 +82,14 @@ function TextInput({
   );
 }
 
-function SelectField({ label, value, onChange, options, helperText, autoIdentified = false }) {
+function SelectField({ label, value, onChange, options, helperText, autoIdentified = false, error }) {
   return (
     <FieldFrame label={label} autoIdentified={autoIdentified} helperText={helperText}>
       <select
         value={value ?? ''}
         onChange={(event) => onChange(event.target.value)}
-        className="h-12 w-full rounded-xl border border-[#E0E6ED] bg-white px-4 text-sm font-medium text-[#181C1E] outline-none transition focus:ring-2 focus:ring-[#006494] focus:ring-offset-2 focus:ring-offset-white"
+        aria-invalid={Boolean(error)}
+        className={`h-12 w-full rounded-xl border bg-white px-4 text-sm font-medium text-[#181C1E] outline-none transition focus:ring-2 focus:ring-[#006494] focus:ring-offset-2 focus:ring-offset-white ${error ? 'border-[#F3B6AA] bg-[#FFF7F6]' : 'border-[#E0E6ED]'}`}
       >
         {options.map((option) => (
           <option key={option} value={option}>
@@ -94,6 +97,7 @@ function SelectField({ label, value, onChange, options, helperText, autoIdentifi
           </option>
         ))}
       </select>
+      {error ? <p className="mt-1.5 text-xs font-semibold text-[#D93025]">{error}</p> : null}
     </FieldFrame>
   );
 }
@@ -135,14 +139,7 @@ function ChoiceGroup({ label, value, options, onChange, helperText, selectedTone
 
 function ManualNameFields({ person, personErrors, onPersonChange }) {
   return (
-    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-      <TextInput
-        label="Parentesco"
-        value={person.parentesco || ''}
-        onChange={(value) => onPersonChange('parentesco', value)}
-        error={personErrors.parentesco}
-        placeholder="Ingresa el parentesco"
-      />
+    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
       <TextInput
         label="Nombre"
         value={person.firstName ?? ''}
@@ -178,6 +175,28 @@ function ReadOnlyField({ label, value, autoIdentified = false, helperText = '' }
   );
 }
 
+function InformationProgress({ fields }) {
+  const completed = fields.filter((value) => String(value ?? '').trim()).length;
+  const total = fields.length;
+  const pending = total - completed;
+  const progress = total > 0 ? Math.round((completed / total) * 100) : 100;
+
+  return (
+    <section className="rounded-[20px] border border-[#C7D8F1] bg-[#F8FBFF] p-4 shadow-sm sm:p-5" aria-label="Progreso de información">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-[0.24em] text-[#006494]">Avance de información</p>
+          <p className="mt-1 text-sm font-semibold text-[#181C1E]">{completed} de {total} campos completados</p>
+        </div>
+        <p className="text-sm font-semibold text-[#586273]">{pending > 0 ? `Te faltan ${pending} datos` : 'Información completa'}</p>
+      </div>
+      <div className="mt-3 h-2 overflow-hidden rounded-full bg-white" aria-hidden="true">
+        <div className="h-full rounded-full bg-[#003781] transition-all" style={{ width: `${progress}%` }} />
+      </div>
+    </section>
+  );
+}
+
 export default function WizardStepInformation({
   policy,
   person,
@@ -185,10 +204,12 @@ export default function WizardStepInformation({
   claimant,
   extracted,
   contactErrors,
+  claimErrors = {},
   onPolicyChange,
   onPersonChange,
   onContactChange,
   onClaimantChange,
+  selectedTramite,
   onBack,
   onSaveDraft,
   onPrimary,
@@ -198,22 +219,48 @@ export default function WizardStepInformation({
   const personErrors =
     !usingAutoData && person.relationship === 'Otro'
       ? {
-          parentesco: person.parentesco?.trim() ? '' : 'Ingresa el parentesco.',
           firstName: String(person.firstName ?? '').trim() ? '' : 'Ingresa el nombre.',
           paternalLastName: String(person.paternalLastName ?? '').trim() ? '' : 'Ingresa el apellido paterno.',
           maternalLastName: String(person.maternalLastName ?? '').trim() ? '' : 'Ingresa el apellido materno.'
         }
       : {};
+  const informationFields = [
+    policy.productType,
+    policy.policyNumber,
+    person.relationship,
+    person.firstName,
+    person.paternalLastName,
+    person.maternalLastName,
+    contact.phoneLandline,
+    contact.mobilePhone,
+    contact.email,
+    contact.emailConfirmation,
+    claimant.type
+  ];
+
+  if (claimant.type === 'Complemento') {
+    informationFields.push(claimant.knowsSinisterNumber);
+    if (claimant.knowsSinisterNumber === 'Sí') informationFields.push(claimant.sinisterNumber);
+  }
+
+  if (selectedTramite === 'cirugia_programada') {
+    informationFields.push(claimant.attentionPlace, claimant.tramiteType);
+    if (claimant.tramiteType === 'Otros') informationFields.push(claimant.observations);
+  } else {
+    informationFields.push(claimant.currency, claimant.claimedAmount, claimant.receiptsCount);
+  }
 
   return (
     <section className="space-y-4">
       <section className="rounded-[20px] border border-[#E0E6ED] bg-white p-5 shadow-sm sm:p-6">
-        <p className="text-xs font-bold uppercase tracking-[0.28em] text-[#006494]">Sección 3 · Información</p>
-        <h2 className="mt-1 text-[30px] font-semibold leading-tight text-[#181C1E] sm:text-[32px]">Revisión de información</h2>
+        <p className="text-xs font-bold uppercase tracking-[0.28em] text-[#006494]">Paso 2</p>
+        <h2 className="mt-1 text-[30px] font-semibold leading-tight text-[#181C1E] sm:text-[32px]">Información</h2>
         <p className="mt-3 max-w-4xl text-base leading-7 text-[#434751]">
-          Hemos identificado la siguiente información. Verifica que sea correcta y completa los datos faltantes antes de continuar.
+          Completa los datos necesarios para continuar con tu solicitud.
         </p>
       </section>
+
+      <InformationProgress fields={informationFields} />
 
       <div className="space-y-4">
         <SectionCard
@@ -327,6 +374,13 @@ export default function WizardStepInformation({
         </div>
       </SectionCard>
 
+      <ClaimInformationSection
+        claimant={claimant}
+        onClaimantChange={onClaimantChange}
+        claimErrors={claimErrors}
+        selectedTramite={selectedTramite}
+      />
+
       <SectionCard
         icon={CheckIcon}
         eyebrow="Datos detectados"
@@ -364,7 +418,7 @@ export default function WizardStepInformation({
         onSaveDraft={onSaveDraft}
         onPrimary={onPrimary}
         primaryDisabled={primaryDisabled}
-        primaryLabel="Continuar"
+        primaryLabel="Siguiente"
       />
     </section>
   );

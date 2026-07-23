@@ -2,7 +2,6 @@ const FIELD_LABELS = {
   productType: 'tipo de producto',
   policyNumber: 'número de póliza',
   relationship: 'persona que realiza el trámite',
-  parentesco: 'parentesco',
   fullName: 'nombre completo',
   firstName: 'nombre',
   paternalLastName: 'apellido paterno',
@@ -16,7 +15,6 @@ const FIELD_PROMPTS = {
   productType: '¿El tipo de producto correcto es Individual o Colectiva?',
   policyNumber: '¿Cuál es el número de póliza correcto?',
   relationship: '¿Quién realiza el trámite: Titular, Afectado u Otra persona?',
-  parentesco: '¿Cuál es el parentesco de la persona que realiza el trámite?',
   fullName: '¿Cuál es el nombre completo correcto?',
   firstName: '¿Cuál es el nombre correcto?',
   paternalLastName: '¿Cuál es el apellido paterno correcto?',
@@ -105,7 +103,6 @@ function detectField(text) {
   if (/telefono/.test(normalized)) return 'mobilePhone';
   if (/poliza/.test(normalized)) return 'policyNumber';
   if (/tipo de producto|producto/.test(normalized)) return 'productType';
-  if (/parentesco/.test(normalized)) return 'parentesco';
   if (/relacion|quien realiza|solicitante/.test(normalized)) return 'relationship';
   if (/nombre completo/.test(normalized)) return 'fullName';
   if (/apellido/.test(normalized)) return 'paternalLastName';
@@ -124,7 +121,6 @@ export function buildInformationSnapshot(policy, person, contact) {
     policyNumber: policy.policyNumber ?? '',
     policyAutoIdentified: Boolean(policy.identifiedAutomatically),
     relationship: person.relationship ?? '',
-    parentesco: person.parentesco ?? '',
     fullName: fullName || person.fullName || '',
     firstName: person.firstName ?? '',
     paternalLastName: person.paternalLastName ?? '',
@@ -208,8 +204,6 @@ export function applyInformationCorrection(current, field, value) {
   } else if (field === 'relationship') {
     next.person.relationship = value;
     if (value !== 'Otro') next.person.parentesco = '';
-  } else if (field === 'parentesco') {
-    next.person.parentesco = value;
   }
 
   return next;

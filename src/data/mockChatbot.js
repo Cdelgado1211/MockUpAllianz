@@ -46,6 +46,7 @@ export const chatbotHistoryItems = [
 ];
 
 export const chatbotQuickActions = [
+  { id: 'complete-form', label: 'Completar un formulario' },
   { id: 'info', label: 'Conocer requisitos' },
   { id: 'start', label: 'Iniciar un trámite' },
   { id: 'formats', label: 'Descargar formatos' },

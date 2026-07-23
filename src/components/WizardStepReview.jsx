@@ -42,7 +42,7 @@ export default function WizardStepReview({
   return (
     <section className="space-y-4">
       <div className="rounded-[2rem] border border-sky-200 bg-white p-5 shadow-sm sm:p-6">
-        <p className="text-xs font-bold uppercase tracking-[0.24em] text-sky-700">Sección 5 · Revisión</p>
+        <p className="text-xs font-bold uppercase tracking-[0.24em] text-sky-700">Sección 3 · Revisión</p>
         <h2 className="mt-1 text-2xl font-extrabold text-slate-900">Resumen final antes de enviar</h2>
         <p className="mt-2 max-w-4xl text-sm leading-6 text-slate-600">
           Revisa la información capturada, confirma que es correcta y continúa al siguiente proceso.
@@ -50,7 +50,7 @@ export default function WizardStepReview({
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <ReviewCard title="Información de la póliza" onEdit={() => onEditStep(2)}>
+        <ReviewCard title="Información de la póliza" onEdit={() => onEditStep(1)}>
           <p className="text-sm leading-6 text-slate-700">
             <span className="font-bold">Tipo de producto:</span> {policy.productType}
             <br />
@@ -58,7 +58,7 @@ export default function WizardStepReview({
           </p>
         </ReviewCard>
 
-        <ReviewCard title="Persona que realiza el trámite" onEdit={() => onEditStep(2)}>
+        <ReviewCard title="Persona que realiza el trámite" onEdit={() => onEditStep(1)}>
           <p className="text-sm leading-6 text-slate-700">
             <span className="font-bold">Relación:</span> {person.relationship}
             <br />
@@ -66,7 +66,7 @@ export default function WizardStepReview({
           </p>
         </ReviewCard>
 
-        <ReviewCard title="Datos de contacto" onEdit={() => onEditStep(2)}>
+        <ReviewCard title="Datos de contacto" onEdit={() => onEditStep(1)}>
           <p className="text-sm leading-6 text-slate-700">
             <span className="font-bold">Teléfono fijo:</span> {contact.phoneLandline || 'Sin capturar'}
             <br />
@@ -76,7 +76,7 @@ export default function WizardStepReview({
           </p>
         </ReviewCard>
 
-        <ReviewCard title="Información de la reclamación" onEdit={() => onEditStep(3)}>
+        <ReviewCard title="Información de la reclamación" onEdit={() => onEditStep(1)}>
           <p className="text-sm leading-6 text-slate-700">
             <span className="font-bold">Tipo:</span> {claimant.type}
             <br />
@@ -116,7 +116,7 @@ export default function WizardStepReview({
         </div>
       </ReviewCard>
 
-      <ReviewCard title="Alertas pendientes" onEdit={() => onEditStep(1)}>
+      <ReviewCard title="Alertas pendientes" onEdit={() => onEditStep(0)}>
         <div className="grid gap-3 lg:grid-cols-2">
           {pendingAlerts.length > 0 ? (
             pendingAlerts.map((alert) => (
@@ -156,7 +156,7 @@ export default function WizardStepReview({
         </div>
       </ReviewCard>
 
-      <ReviewCard title="Alertas aceptadas por el usuario" onEdit={() => onEditStep(1)}>
+      <ReviewCard title="Alertas aceptadas por el usuario" onEdit={() => onEditStep(0)}>
         {acceptedAlerts.length > 0 ? (
           <div className="grid gap-3 lg:grid-cols-2">
             {acceptedAlerts.map((alertId) => {
